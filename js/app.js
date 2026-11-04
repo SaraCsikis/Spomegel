@@ -35,7 +35,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const currentQuestionText = document.getElementById("currentQuestionText");
   const nextQuestionBtn = document.getElementById("nextQuestionBtn");
   const vocabCardsContainer = document.getElementById("vocabCardsContainer");
-  const nextVocabBtn = document.getElementById("nextVocabBtn");
 
   // WebRTC & Status-Variablen
   let mqttClient = null;
@@ -60,7 +59,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   let currentDeck = null;
   let questionIndex = 0;
-  let vocabOffset = 0;
 
   const rtcConfig = {
     iceServers: [
@@ -84,7 +82,7 @@ document.addEventListener("DOMContentLoaded", () => {
       });
       if (localVideo) {
         localVideo.srcObject = localStream;
-        localVideo.muted = true; // Eigenes Video stummschalten (kein Echo!)
+        localVideo.muted = true; // Eigenes Video immer stumm
         await localVideo.play().catch(() => {});
       }
       return localStream;
@@ -107,7 +105,6 @@ document.addEventListener("DOMContentLoaded", () => {
     // Lokale Kamera- und Mikrofonspuren einbinden
     if (localStream) {
       localStream.getTracks().forEach(track => {
-        console.log("[WebRTC] Lokale Spur hinzugefügt:", track.kind);
         pc.addTrack(track, localStream);
       });
     }
@@ -127,12 +124,11 @@ document.addEventListener("DOMContentLoaded", () => {
           stream.addTrack(event.track);
         }
 
-        // Partner-Audio aktivieren (nicht stumm!)
-        remoteVideo.muted = false;
+        remoteVideo.muted = false; // Partner-Audio aktivieren
         remoteVideo.volume = 1.0;
 
         remoteVideo.play().catch(err => {
-          console.warn("[WebRTC] Autoplay mit Ton blockiert:", err);
+          console.warn("[WebRTC] Autoplay blockiert, warte auf Klick:", err);
           document.addEventListener("click", () => {
             remoteVideo.muted = false;
             remoteVideo.play().catch(() => {});
@@ -192,26 +188,21 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function handleIncomingMessage(topic, data) {
-    // 1. Private Einladung
     if (topic === `spomegel/user/${myId}`) {
       if (data.type === "INVITE" && state === "searching") {
-        console.log("[Match] Einladung erhalten von:", data.from);
         partnerId = data.from;
         joinRoom(data.roomId, data.partnerProfile, false);
       }
     }
-    // 2. Warteschlange
     else if (topic === "spomegel/queue") {
       if (state === "searching" && data.id && data.id !== myId) {
         checkMatchCandidate(data);
       }
     }
-    // 3. Im Raum
     else if (topic === `spomegel/room/${currentRoomId}`) {
       if (data.senderId === myId) return;
 
       if (data.type === "ROOM_JOINED") {
-        console.log("[WebRTC] Partner im Raum. Starte Offer (Audio + Video)...");
         if (profile.mode === "video" && pc) {
           try {
             const offer = await pc.createOffer({
@@ -233,7 +224,6 @@ document.addEventListener("DOMContentLoaded", () => {
         appendChatMessage(data.text, "partner");
       }
       else if (data.type === "SIGNAL_OFFER") {
-        console.log("[WebRTC] Offer empfangen. Erstelle Answer...");
         if (profile.mode === "video") {
           if (!pc) createPeerConnection();
           await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
@@ -253,7 +243,6 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       }
       else if (data.type === "SIGNAL_ANSWER") {
-        console.log("[WebRTC] Answer empfangen!");
         if (pc && profile.mode === "video") {
           await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
           while (pendingCandidates.length) {
@@ -303,7 +292,6 @@ document.addEventListener("DOMContentLoaded", () => {
       const roomId = "room_" + Math.random().toString(36).substring(2, 9);
       partnerId = candidate.id;
 
-      console.log("[Match] Einladung senden an:", candidate.id);
       mqttClient.publish(
         `spomegel/user/${candidate.id}`,
         JSON.stringify({
@@ -524,7 +512,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (window.getPromptDeck) {
       currentDeck = window.getPromptDeck(level, targetLang);
       questionIndex = 0;
-      vocabOffset = 0;
 
       renderCurrentQuestion();
       renderVocabCards();
@@ -547,14 +534,13 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  // Zeigt direkt die vollständige längere Liste an Wörtern
   function renderVocabCards() {
     if (!currentDeck || !vocabCardsContainer) return;
     const words = currentDeck.vocabulary || [];
     vocabCardsContainer.innerHTML = "";
 
-    for (let i = 0; i < 4; i++) {
-      const item = words[(vocabOffset + i) % words.length];
-      if (!item) continue;
+    words.forEach(item => {
       const li = document.createElement("li");
       li.innerHTML = `
         <span><strong>${item.word}</strong>: <em>"${item.example}"</em></span>
@@ -568,13 +554,6 @@ document.addEventListener("DOMContentLoaded", () => {
       });
 
       vocabCardsContainer.appendChild(li);
-    }
-  }
-
-  if (nextVocabBtn) {
-    nextVocabBtn.addEventListener("click", () => {
-      vocabOffset += 4;
-      renderVocabCards();
     });
   }
 
