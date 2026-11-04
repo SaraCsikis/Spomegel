@@ -1,6 +1,5 @@
 /**
- * Spomegel Main Application Controller
- * Handles UI transitions, 10-minute timer, vocab decks, chat, and media controls
+ * Spomegel Main Controller (Minimal & Simple)
  */
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -9,52 +8,40 @@ document.addEventListener("DOMContentLoaded", () => {
     window.NotesModule.init();
   }
 
-  // UI Elements
+  // Screens
   const lobbyScreen = document.getElementById("lobbyScreen");
   const callRoom = document.getElementById("callRoom");
   const searchOverlay = document.getElementById("searchOverlay");
+
+  // Buttons
   const startBtn = document.getElementById("startBtn");
+  const cancelSearchBtn = document.getElementById("cancelSearchBtn");
   const skipBtn = document.getElementById("skipBtn");
   const leaveBtn = document.getElementById("leaveBtn");
-  const cancelSearchBtn = document.getElementById("cancelSearchBtn");
-
-  // Media Elements
-  const localVideo = document.getElementById("localVideo");
-  const remoteVideo = document.getElementById("remoteVideo");
   const micToggleBtn = document.getElementById("micToggleBtn");
   const camToggleBtn = document.getElementById("camToggleBtn");
+
+  // Media
+  const localVideo = document.getElementById("localVideo");
+  const remoteVideo = document.getElementById("remoteVideo");
   const videoPlaceholder = document.getElementById("videoPlaceholder");
 
-  // Chat Elements
+  // Chat
   const chatMessages = document.getElementById("chatMessages");
   const chatInput = document.getElementById("chatInput");
   const chatSendBtn = document.getElementById("chatSendBtn");
 
-  // Timer & Practice Bar Elements
+  // Status & Timer
   const timerDisplay = document.getElementById("timerDisplay");
-  const timerCircle = document.getElementById("timerCircle");
   const practiceBanner = document.getElementById("practiceBanner");
+  const searchStatusText = document.getElementById("searchStatusText");
 
-  // Topic & Vocab Elements
+  // Topic & Vocab
   const currentTopicTitle = document.getElementById("currentTopicTitle");
   const currentQuestionText = document.getElementById("currentQuestionText");
   const nextQuestionBtn = document.getElementById("nextQuestionBtn");
   const vocabCardsContainer = document.getElementById("vocabCardsContainer");
   const nextVocabBtn = document.getElementById("nextVocabBtn");
-
-  // Sidebar Tab Switching
-  const tabBtns = document.querySelectorAll(".tab-btn");
-  const tabPanels = document.querySelectorAll(".tab-panel");
-
-  tabBtns.forEach(btn => {
-    btn.addEventListener("click", () => {
-      tabBtns.forEach(b => b.classList.remove("active"));
-      tabPanels.forEach(p => p.classList.remove("active"));
-      btn.classList.add("active");
-      const targetPanel = document.getElementById(btn.dataset.tab);
-      if (targetPanel) targetPanel.classList.add("active");
-    });
-  });
 
   // State
   let currentDeck = null;
@@ -63,7 +50,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let isMicMuted = false;
   let isCamOff = false;
 
-  // 10-Minute Timer State (10 * 60 = 600 seconds)
+  // 10-Minute Timer (600s)
   const TOTAL_SECONDS = 600;
   let timerRemaining = TOTAL_SECONDS;
   let timerInterval = null;
@@ -115,16 +102,14 @@ document.addEventListener("DOMContentLoaded", () => {
     },
 
     onPartnerLeft: (isSkip) => {
-      appendSystemMessage(isSkip ? "Partner skipped to the next person." : "Partner disconnected.");
-      // Prompt user or automatically search next
+      appendSystemMessage(isSkip ? "Partner skipped to the next stranger." : "Partner disconnected.");
       setTimeout(() => {
         engine.skipPartner();
       }, 1000);
     },
 
     onStatusUpdate: (text) => {
-      const statusPill = document.getElementById("searchStatusText");
-      if (statusPill) statusPill.textContent = text;
+      if (searchStatusText) searchStatusText.textContent = text;
     }
   });
 
@@ -159,35 +144,32 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Skip / Next Partner
   skipBtn.addEventListener("click", () => {
-    appendSystemMessage("Searching for a new partner...");
+    appendSystemMessage("Looking for next partner...");
     resetTimer();
     engine.skipPartner();
   });
 
   // Leave Call
   leaveBtn.addEventListener("click", () => {
-    if (confirm("Leave this conversation and return to the lobby?")) {
+    if (confirm("Leave this conversation?")) {
       engine.leave();
     }
   });
 
-  // Toggle Microphone
+  // Media Toggles
   micToggleBtn.addEventListener("click", () => {
     isMicMuted = !isMicMuted;
     engine.toggleAudio(!isMicMuted);
-    micToggleBtn.classList.toggle("btn-danger", isMicMuted);
-    micToggleBtn.innerHTML = isMicMuted ? "🔇 Mic Off" : "🎤 Mic On";
+    micToggleBtn.textContent = isMicMuted ? "Unmute Mic" : "Mute Mic";
   });
 
-  // Toggle Camera
   camToggleBtn.addEventListener("click", () => {
     isCamOff = !isCamOff;
     engine.toggleVideo(!isCamOff);
-    camToggleBtn.classList.toggle("btn-danger", isCamOff);
-    camToggleBtn.innerHTML = isCamOff ? "📷 Cam Off" : "📹 Cam On";
+    camToggleBtn.textContent = isCamOff ? "Turn On Cam" : "Turn Off Cam";
   });
 
-  // Chat message send
+  // Chat
   function sendChat() {
     const text = chatInput.value.trim();
     if (!text) return;
@@ -196,7 +178,7 @@ document.addEventListener("DOMContentLoaded", () => {
       appendChatMessage(text, "me");
       chatInput.value = "";
     } else {
-      appendSystemMessage("Chat not connected yet.");
+      appendSystemMessage("Chat not connected.");
     }
   }
 
@@ -207,7 +189,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // Keyboard shortcut: ESC to skip to next partner
+  // Hotkey: Esc to skip
   window.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && engine.state === "matched") {
       skipBtn.click();
@@ -216,26 +198,27 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function appendChatMessage(text, sender) {
     const div = document.createElement("div");
-    div.className = `chat-bubble chat-${sender}`;
-    div.innerHTML = `<span class="sender-name">${sender === "me" ? "You" : "Stranger"}</span><p class="bubble-text"></p>`;
-    div.querySelector(".bubble-text").textContent = text;
+    div.className = `chat-msg ${sender}`;
+    const label = sender === "me" ? "You: " : "Partner: ";
+    div.innerHTML = `<strong>${label}</strong><span class="msg-text"></span>`;
+    div.querySelector(".msg-text").textContent = text;
     chatMessages.appendChild(div);
     chatMessages.scrollTop = chatMessages.scrollHeight;
   }
 
   function appendSystemMessage(text) {
     const div = document.createElement("div");
-    div.className = "chat-system-msg";
+    div.className = "chat-msg system";
     div.textContent = text;
     chatMessages.appendChild(div);
     chatMessages.scrollTop = chatMessages.scrollHeight;
   }
 
   function clearChat() {
-    chatMessages.innerHTML = "";
+    chatMessages.innerHTML = '<div class="chat-msg system">Chat started. Type a message below.</div>';
   }
 
-  // 10-Minute Countdown Timer
+  // 10-Minute Timer
   function startTimer() {
     resetTimer();
     timerRemaining = TOTAL_SECONDS;
@@ -247,8 +230,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (timerRemaining <= 0) {
         clearInterval(timerInterval);
-        appendSystemMessage("⏰ 10 minutes reached! Great job! Feel free to keep talking or click Next Partner.");
-        alert("10 minutes reached! You can continue chatting or click Next Partner to practice with someone new.");
+        appendSystemMessage("⏰ 10 minutes reached! Great chat. Continue or click Next Partner.");
       }
     }, 1000);
   }
@@ -263,35 +245,32 @@ document.addEventListener("DOMContentLoaded", () => {
     const mins = Math.floor(timerRemaining / 60);
     const secs = timerRemaining % 60;
     const formatted = `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
-    if (timerDisplay) timerDisplay.textContent = formatted;
-
-    // Visual color cues
     if (timerDisplay) {
-      timerDisplay.classList.remove("timer-warning", "timer-danger");
+      timerDisplay.textContent = formatted;
+      timerDisplay.classList.remove("warning", "danger");
       if (timerRemaining <= 60) {
-        timerDisplay.classList.add("timer-danger");
+        timerDisplay.classList.add("danger");
       } else if (timerRemaining <= 180) {
-        timerDisplay.classList.add("timer-warning");
+        timerDisplay.classList.add("warning");
       }
     }
   }
 
-  // Setup Topic Deck & Vocabulary Cards
+  // Practice Deck & Vocab
   function setupPracticeDeck(partnerProfile) {
     const myProfile = engine.profile;
     const topicId = myProfile.topic || "travel";
     const level = myProfile.level || "B1";
     const targetLang = myProfile.targetLang || "fr";
 
-    // Update banner
     const langNames = {
       en: "English", de: "German", fr: "French", es: "Spanish", it: "Italian"
     };
 
     if (practiceBanner) {
       practiceBanner.innerHTML = `
-        🎯 <strong>You are practicing:</strong> <span class="badge-lang">${langNames[targetLang] || targetLang}</span> (${level}) 
-        &nbsp;|&nbsp; <strong>Topic:</strong> <span class="badge-topic">${topicId.toUpperCase()}</span>
+        <strong>You are practicing:</strong> ${langNames[targetLang] || targetLang} (${level}) 
+        | <strong>Topic:</strong> ${topicId.toUpperCase()}
       `;
     }
 
@@ -327,31 +306,28 @@ document.addEventListener("DOMContentLoaded", () => {
     const words = currentDeck.vocabulary || [];
     vocabCardsContainer.innerHTML = "";
 
-    // Show 3 words at a time
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 4; i++) {
       const item = words[(vocabOffset + i) % words.length];
       if (!item) continue;
-      const card = document.createElement("div");
-      card.className = "vocab-card";
-      card.innerHTML = `
-        <div class="vocab-word">${item.word}</div>
-        <div class="vocab-example">"${item.example}"</div>
-        <button class="vocab-add-btn" title="Save to your notes">➕ Add to Notes</button>
+      const li = document.createElement("li");
+      li.innerHTML = `
+        <span><strong>${item.word}</strong>: <em>"${item.example}"</em></span>
+        <button class="small vocab-add-btn" title="Save to notes">+ Note</button>
       `;
 
-      card.querySelector(".vocab-add-btn").addEventListener("click", () => {
+      li.querySelector(".vocab-add-btn").addEventListener("click", () => {
         if (window.NotesModule) {
           window.NotesModule.appendNote(`• ${item.word}: ${item.example}`);
         }
       });
 
-      vocabCardsContainer.appendChild(card);
+      vocabCardsContainer.appendChild(li);
     }
   }
 
   if (nextVocabBtn) {
     nextVocabBtn.addEventListener("click", () => {
-      vocabOffset += 3;
+      vocabOffset += 4;
       renderVocabCards();
     });
   }
