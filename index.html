@@ -2,29 +2,21 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Spomegel - Sprach Omegle</title>
+  <title>Spomegel</title>
   <link rel="stylesheet" href="css/style.css">
-  
-  <!-- Lightweight MQTT library for instant real-time text chat & matching -->
   <script src="https://unpkg.com/mqtt@5.3.4/dist/mqtt.min.js"></script>
 </head>
 <body>
 
-  <!-- Header -->
-  <header>
-    <div>
-      <h1>Spomegel <span class="subtitle">Sprach-Omegle (Text-Only Language Exchange)</span></h1>
-    </div>
-    <div id="timerDisplay" class="timer">10:00</div>
-  </header>
+  <p><strong>Timer:</strong> <span id="timerDisplay" class="timer">10:00</span></p>
+  <hr>
 
   <!-- SCREEN 1: Setup / Lobby -->
-  <section id="lobbyScreen" class="lobby-box">
-    <h2>Start a Conversation</h2>
+  <div id="lobbyScreen">
+    <h3>Start a Conversation</h3>
 
-    <div class="form-row">
-      <label for="nativeLang">I speak (Native / Known):</label>
+    <p>
+      <label for="nativeLang">I speak:</label><br>
       <select id="nativeLang">
         <option value="de" selected>German</option>
         <option value="en">English</option>
@@ -32,10 +24,10 @@
         <option value="es">Spanish</option>
         <option value="it">Italian</option>
       </select>
-    </div>
+    </p>
 
-    <div class="form-row">
-      <label for="targetLang">I want to learn / practice:</label>
+    <p>
+      <label for="targetLang">I want to learn:</label><br>
       <select id="targetLang">
         <option value="fr" selected>French</option>
         <option value="de">German</option>
@@ -43,10 +35,10 @@
         <option value="es">Spanish</option>
         <option value="it">Italian</option>
       </select>
-    </div>
+    </p>
 
-    <div class="form-row">
-      <label for="levelSelect">My Level in Target Language:</label>
+    <p>
+      <label for="levelSelect">My level:</label><br>
       <select id="levelSelect">
         <option value="A1">A1 (Beginner)</option>
         <option value="A2">A2 (Elementary)</option>
@@ -55,19 +47,19 @@
         <option value="C1">C1 (Advanced)</option>
         <option value="C2">C2 (Fluent)</option>
       </select>
-    </div>
+    </p>
 
-    <div class="form-row">
-      <label for="motivationSelect">Learning Goal (Motivation):</label>
+    <p>
+      <label for="motivationSelect">Motivation:</label><br>
       <select id="motivationSelect">
-        <option value="casual">Casual (Just for fun)</option>
-        <option value="regular" selected>Regular (School / Travel practice)</option>
-        <option value="intensive">Intensive (Fluent / Career)</option>
+        <option value="casual">Casual</option>
+        <option value="regular" selected>Regular</option>
+        <option value="intensive">Intensive</option>
       </select>
-    </div>
+    </p>
 
-    <div class="form-row">
-      <label for="topicSelect">Conversation Topic:</label>
+    <p>
+      <label for="topicSelect">Conversation topic:</label><br>
       <select id="topicSelect">
         <option value="travel" selected>Travel & Holidays</option>
         <option value="daily">Daily Life & Habits</option>
@@ -75,91 +67,55 @@
         <option value="culture">Culture & Traditions</option>
         <option value="deep">Deep Questions & Philosophy</option>
       </select>
-    </div>
+    </p>
 
-    <button id="startBtn" class="primary start-btn">Find Stranger & Start Chat</button>
-  </section>
+    <p>
+      <button id="startBtn">Find Stranger</button>
+    </p>
+  </div>
 
-  <!-- SCREEN 2: Waiting Screen -->
-  <section id="searchOverlay" class="waiting-box hidden">
+  <!-- SCREEN 2: Waiting -->
+  <div id="searchOverlay" class="hidden">
     <h3>Looking for a partner...</h3>
-    <p id="searchStatusText">Connecting to matchmaking network...</p>
-    <div class="tip-box">
-      💡 <strong>How to test right now:</strong> Open a second browser tab to this same page and click "Find Stranger". Both tabs will instantly connect with each other!
-    </div>
+    <p id="searchStatusText">Connecting...</p>
+    <p><em>(Tip: Open another browser tab with this page and click Find Stranger to test pairing)</em></p>
     <button id="cancelSearchBtn">Cancel</button>
-  </section>
+  </div>
 
   <!-- SCREEN 3: Chat Room -->
-  <section id="callRoom" class="chat-layout hidden">
+  <div id="callRoom" class="hidden">
+    <p id="practiceBanner"><strong>Connected</strong></p>
 
-    <!-- Left Column: Chat Window & Controls -->
-    <div class="chat-column">
-      <!-- Status bar -->
-      <div id="practiceBanner" class="info-bar">
-        <span>Connected to stranger!</span>
-      </div>
+    <div id="chatMessages" class="chat-box"></div>
 
-      <!-- Messages Box -->
-      <div id="chatMessages" class="chat-box">
-        <div class="chat-msg system">You are now chatting with a random stranger. Say hi!</div>
-      </div>
+    <p>
+      <input type="text" id="chatInput" placeholder="Type message..." size="45">
+      <button id="chatSendBtn">Send</button>
+    </p>
 
-      <!-- Input Row -->
-      <div class="chat-controls">
-        <input type="text" id="chatInput" placeholder="Type a message and press Enter..." autofocus>
-        <button id="chatSendBtn" class="primary">Send</button>
-      </div>
+    <p>
+      <button id="skipBtn">Next Stranger (Esc)</button>
+      <button id="leaveBtn">Disconnect</button>
+    </p>
 
-      <!-- Actions -->
-      <div class="action-bar">
-        <button id="skipBtn" class="primary" title="Press Esc to skip">Next Stranger (Esc)</button>
-        <button id="leaveBtn" class="danger">Disconnect / Leave</button>
-      </div>
-    </div>
+    <hr>
 
-    <!-- Right Column: Prompts, Vocab, Notes -->
-    <div class="side-column">
+    <h4>Topic: <span id="currentTopicTitle"></span></h4>
+    <p><strong>Prompt:</strong> <span id="currentQuestionText">Loading...</span></p>
+    <button id="nextQuestionBtn">Next Question</button>
 
-      <!-- Conversation Prompt -->
-      <div class="card">
-        <h3>
-          <span id="currentTopicTitle">Topic</span>
-          <button id="nextQuestionBtn" class="small">Next Question</button>
-        </h3>
-        <p id="currentQuestionText" class="question-text">Loading...</p>
-      </div>
+    <h4 style="margin-top: 10px;">Vocabulary Helper</h4>
+    <ul id="vocabCardsContainer"></ul>
+    <button id="nextVocabBtn">More Words</button>
 
-      <!-- Vocabulary Card -->
-      <div class="card">
-        <h3>
-          <span>Vocabulary Helper</span>
-          <button id="nextVocabBtn" class="small">More Words</button>
-        </h3>
-        <ul id="vocabCardsContainer" class="vocab-list">
-          <!-- Populated by JS -->
-        </ul>
-      </div>
+    <h4 style="margin-top: 10px;">Notes</h4>
+    <textarea id="notesTextarea" rows="5" cols="55" placeholder="Type personal notes here..."></textarea><br>
+    <span id="notesSaveStatus" style="font-size: 12px; color: gray;">Saved</span> | 
+    <button id="notesCopyBtn">Copy</button>
+    <button id="notesDownloadBtn">Export .txt</button>
+    <button id="notesClearBtn">Clear</button>
+  </div>
 
-      <!-- Notes Area -->
-      <div class="card">
-        <h3>My Notes</h3>
-        <textarea id="notesTextarea" class="notes-area" placeholder="Jot down words here... (Saved automatically)"></textarea>
-        <div class="notes-bottom">
-          <span id="notesSaveStatus">Saved</span>
-          <div>
-            <button id="notesCopyBtn" class="small">Copy</button>
-            <button id="notesDownloadBtn" class="small">Export .txt</button>
-            <button id="notesClearBtn" class="small">Clear</button>
-          </div>
-        </div>
-      </div>
-
-    </div>
-
-  </section>
-
-  <!-- JS Modules -->
   <script src="js/prompts.js"></script>
   <script src="js/notes.js"></script>
   <script src="js/app.js"></script>
