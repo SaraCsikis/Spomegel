@@ -1,5 +1,5 @@
 /**
- * Spomegel - Zuverlässiges Matchmaking & natives WebRTC-Streaming
+ * Spomegel - Zuverlässiges Matchmaking & natives WebRTC (Video + Audio/Mikrofon)
  */
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -70,23 +70,27 @@ document.addEventListener("DOMContentLoaded", () => {
     ]
   };
 
-  // Kamera & Mikrofon holen
+  // Kamera & Mikrofon holen (mit Echounterdrückung)
   async function initCamera() {
     if (localStream && localStream.active) return localStream;
     try {
       localStream = await navigator.mediaDevices.getUserMedia({
         video: { width: { ideal: 320 }, height: { ideal: 240 } },
-        audio: true
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
       });
       if (localVideo) {
         localVideo.srcObject = localStream;
-        localVideo.muted = true; // Eigenes Video immer stumm
+        localVideo.muted = true; // Eigenes Video stummschalten (kein Echo!)
         await localVideo.play().catch(() => {});
       }
       return localStream;
     } catch (err) {
-      console.error("Kamerafehler:", err);
-      alert("Kamerazugriff erforderlich für Videomodus: " + (err.message || err.name));
+      console.error("Kamera/Mikrofon-Fehler:", err);
+      alert("Kamera- und Mikrofonzugriff erforderlich: " + (err.message || err.name));
       return null;
     }
   }
@@ -100,22 +104,39 @@ document.addEventListener("DOMContentLoaded", () => {
     pc = new RTCPeerConnection(rtcConfig);
     pendingCandidates = [];
 
-    // Lokale Kamera- und Audiospuren einbinden
+    // Lokale Kamera- und Mikrofonspuren einbinden
     if (localStream) {
       localStream.getTracks().forEach(track => {
+        console.log("[WebRTC] Lokale Spur hinzugefügt:", track.kind);
         pc.addTrack(track, localStream);
       });
     }
 
-    // Wenn der Videostream des Partners ankommt
+    // Wenn der Audio-/Videostream des Partners ankommt
     pc.ontrack = (event) => {
-      console.log("[WebRTC] Videostream vom Partner empfangen:", event.streams[0]);
+      console.log("[WebRTC] Partner-Spur empfangen:", event.track.kind);
       if (remoteVideo) {
-        remoteVideo.srcObject = event.streams[0];
+        if (event.streams && event.streams[0]) {
+          remoteVideo.srcObject = event.streams[0];
+        } else {
+          let stream = remoteVideo.srcObject;
+          if (!stream) {
+            stream = new MediaStream();
+            remoteVideo.srcObject = stream;
+          }
+          stream.addTrack(event.track);
+        }
+
+        // Partner-Audio aktivieren (nicht stumm!)
+        remoteVideo.muted = false;
+        remoteVideo.volume = 1.0;
+
         remoteVideo.play().catch(err => {
-          console.warn("[WebRTC] Autoplay geblockt, spiele stumm ab:", err);
-          remoteVideo.muted = true;
-          remoteVideo.play().catch(() => {});
+          console.warn("[WebRTC] Autoplay mit Ton blockiert:", err);
+          document.addEventListener("click", () => {
+            remoteVideo.muted = false;
+            remoteVideo.play().catch(() => {});
+          }, { once: true });
         });
       }
     };
@@ -134,7 +155,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return pc;
   }
 
-  // MQTT-Verbindung aufbauen und dauerhaft halten
+  // MQTT-Verbindung aufbauen
   function connectBroker() {
     if (mqttClient) {
       if (mqttClient.connected && state === "searching") {
@@ -166,12 +187,12 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     mqttClient.on("error", (err) => {
-      console.warn("[MQTT] Verbindungsnotiz:", err.message);
+      console.warn("[MQTT] Notiz:", err.message);
     });
   }
 
   async function handleIncomingMessage(topic, data) {
-    // 1. Private Einladung erhalten
+    // 1. Private Einladung
     if (topic === `spomegel/user/${myId}`) {
       if (data.type === "INVITE" && state === "searching") {
         console.log("[Match] Einladung erhalten von:", data.from);
@@ -179,19 +200,18 @@ document.addEventListener("DOMContentLoaded", () => {
         joinRoom(data.roomId, data.partnerProfile, false);
       }
     }
-    // 2. Warteschlange nach passenden Personen durchsuchen
+    // 2. Warteschlange
     else if (topic === "spomegel/queue") {
       if (state === "searching" && data.id && data.id !== myId) {
         checkMatchCandidate(data);
       }
     }
-    // 3. Im Raum: Chat & WebRTC-Signale
+    // 3. Im Raum
     else if (topic === `spomegel/room/${currentRoomId}`) {
-      if (data.senderId === myId) return; // Eigene Nachrichten ignorieren
+      if (data.senderId === myId) return;
 
-      // Partner ist dem Raum beigetreten -> Initiator startet das WebRTC-Angebot
       if (data.type === "ROOM_JOINED") {
-        console.log("[WebRTC] Partner im Raum bereit. Starte Offer...");
+        console.log("[WebRTC] Partner im Raum. Starte Offer (Audio + Video)...");
         if (profile.mode === "video" && pc) {
           try {
             const offer = await pc.createOffer({
@@ -213,12 +233,11 @@ document.addEventListener("DOMContentLoaded", () => {
         appendChatMessage(data.text, "partner");
       }
       else if (data.type === "SIGNAL_OFFER") {
-        console.log("[WebRTC] SIGNAL_OFFER erhalten, erstelle Answer...");
+        console.log("[WebRTC] Offer empfangen. Erstelle Answer...");
         if (profile.mode === "video") {
           if (!pc) createPeerConnection();
           await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
 
-          // Gespeicherte ICE-Kandidaten nachholen
           while (pendingCandidates.length) {
             await pc.addIceCandidate(pendingCandidates.shift()).catch(() => {});
           }
@@ -234,7 +253,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       }
       else if (data.type === "SIGNAL_ANSWER") {
-        console.log("[WebRTC] SIGNAL_ANSWER erhalten, Verbindung hergestellt!");
+        console.log("[WebRTC] Answer empfangen!");
         if (pc && profile.mode === "video") {
           await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
           while (pendingCandidates.length) {
@@ -258,23 +277,17 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // Matchmaking-Prüfung
+  // Matchmaking
   function checkMatchCandidate(candidate) {
     if (state !== "searching") return;
-
-    // 1. Modus MUSS identisch sein (Video nur mit Video, Text nur mit Text)
     if (candidate.mode !== profile.mode) return;
 
-    // 2. Sprachprüfung:
-    // Fall A: Tandem (Du sprichst seine Zielsprache & er spricht deine)
     const isTandem =
       candidate.nativeLang === profile.targetLang &&
       candidate.targetLang === profile.nativeLang;
 
-    // Fall B: Beide lernen dieselbe Sprache
     const isSameTarget = candidate.targetLang === profile.targetLang;
 
-    // Fall C: Nach 6 Sekunden Wartezeit auch bei teilweiser Sprachüberschneidung verbinden
     const waitSec = (Date.now() - searchStartTime) / 1000;
     const isOverlap =
       waitSec > 6 &&
@@ -283,15 +296,14 @@ document.addEventListener("DOMContentLoaded", () => {
        candidate.targetLang === profile.nativeLang);
 
     if (!isTandem && !isSameTarget && !isOverlap) {
-      return; // Nicht passend
+      return;
     }
 
-    // Tie-Breaker: Nutzer mit größerer ID erstellt den Raum
     if (myId > candidate.id) {
       const roomId = "room_" + Math.random().toString(36).substring(2, 9);
       partnerId = candidate.id;
 
-      console.log("[Match] Partner gefunden! Sende Einladung:", candidate.id);
+      console.log("[Match] Einladung senden an:", candidate.id);
       mqttClient.publish(
         `spomegel/user/${candidate.id}`,
         JSON.stringify({
@@ -314,7 +326,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (mqttClient) {
       mqttClient.unsubscribe("spomegel/queue");
       mqttClient.subscribe(`spomegel/room/${roomId}`, { qos: 1 }, () => {
-        // Dem Raum mitteilen, dass man bereit ist
         if (!isInitiator) {
           mqttClient.publish(`spomegel/room/${roomId}`, JSON.stringify({
             type: "ROOM_JOINED",
@@ -324,7 +335,6 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     }
 
-    // Video-Setup
     if (profile.mode === "video") {
       videoSection.classList.remove("hidden");
       createPeerConnection();
@@ -332,7 +342,6 @@ document.addEventListener("DOMContentLoaded", () => {
       videoSection.classList.add("hidden");
     }
 
-    // UI umschalten
     searchOverlay.classList.add("hidden");
     lobbyScreen.classList.add("hidden");
     callRoom.classList.remove("hidden");
@@ -354,7 +363,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (searchStatusText) {
       searchStatusText.textContent = profile.mode === "video" 
-        ? "Kamera wird aktiviert... Suche nach Video-Partner..."
+        ? "Kamera & Mikrofon werden aktiviert... Suche nach Partner..."
         : "Suche nach passendem Text-Partner...";
     }
 
@@ -400,7 +409,10 @@ document.addEventListener("DOMContentLoaded", () => {
       pc = null;
     }
     pendingCandidates = [];
-    if (remoteVideo) remoteVideo.srcObject = null;
+    if (remoteVideo) {
+      remoteVideo.srcObject = null;
+      remoteVideo.muted = false;
+    }
   }
 
   function leave() {
@@ -566,6 +578,5 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // MQTT sofort im Hintergrund vorbereiten
   connectBroker();
 });

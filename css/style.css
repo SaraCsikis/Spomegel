@@ -1,8 +1,14 @@
-/* Minimal, un-centered, bare-bones styling */
+/* Minimal, centered styling */
+
+* {
+  box-sizing: border-box;
+}
 
 body {
   font-family: sans-serif;
-  margin: 15px;
+  margin: 25px auto;
+  max-width: 540px;
+  padding: 0 15px;
   background: #ffffff;
   color: #000000;
 }
@@ -21,7 +27,7 @@ hr {
   border-top: 1px solid #ccc;
 }
 
-/* Video elements - simple, unstyled boxes */
+/* Video-Elemente */
 video {
   background: #111;
   border: 1px solid #666;
@@ -30,27 +36,28 @@ video {
 }
 
 #remoteVideo {
-  width: 320px;
-  height: 240px;
+  width: 100%;
+  max-width: 510px;
+  height: 260px;
   object-fit: cover;
 }
 
 #localVideo {
-  width: 160px;
-  height: 120px;
+  width: 150px;
+  height: 110px;
   object-fit: cover;
   transform: scaleX(-1);
 }
 
 .chat-box {
-  width: 500px;
-  max-width: 100%;
+  width: 100%;
   height: 240px;
   border: 1px solid #777;
   background: #fff;
   overflow-y: scroll;
   padding: 5px;
   font-size: 14px;
+  margin-top: 6px;
 }
 
 .chat-msg {
@@ -69,6 +76,17 @@ video {
   color: gray;
   font-style: italic;
   font-size: 13px;
+}
+
+input[type="text"],
+select,
+textarea {
+  font-family: inherit;
+  font-size: 14px;
+}
+
+textarea {
+  width: 100%;
 }
 
 ul {
