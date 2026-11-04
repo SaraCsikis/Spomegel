@@ -12,12 +12,15 @@
 </head>
 <body>
 
-  <p><strong>Zeit:</strong> <span id="timerDisplay" class="timer">10:00</span></p>
-  <hr>
-
   <!-- BILDSCHIRM 1: Lobby / Einstellungen -->
   <div id="lobbyScreen">
     <h3>Gespräch starten</h3>
+
+    <p>
+      <label>Modus:</label><br>
+      <label><input type="radio" name="mode" value="video" checked> Video</label> &nbsp;
+      <label><input type="radio" name="mode" value="text"> Nur Text</label>
+    </p>
 
     <p>
       <label for="nativeLang">Ich spreche:</label><br>
@@ -70,24 +73,27 @@
   <!-- BILDSCHIRM 2: Wartemodus -->
   <div id="searchOverlay" class="hidden">
     <h3>Suche nach einem Gesprächspartner...</h3>
-    <p id="searchStatusText">Kamera aktivieren und mit Netzwerk verbinden...</p>
-    <p><em>(Tipp: Öffne einen zweiten Tab mit dieser Seite und klicke auf Partner suchen, um die Verbindung direkt zu testen)</em></p>
+    <p id="searchStatusText">Warte auf passenden Partner im Netzwerk...</p>
+    <p><em>(Tipp: Öffne einen zweiten Tab mit dieser Seite, wähle passende Sprachen und klicke auf Partner suchen)</em></p>
     <button id="cancelSearchBtn">Abbrechen</button>
   </div>
 
-  <!-- BILDSCHIRM 3: Video- und Chatraum -->
+  <!-- BILDSCHIRM 3: Raum -->
   <div id="callRoom" class="hidden">
     <p id="practiceBanner">Du übst: Französisch (B1)</p>
 
-    <p>
-      <strong>Fremder:</strong><br>
-      <video id="remoteVideo" autoplay playsinline></video>
-    </p>
+    <!-- Video-Bereich (wird im Nur-Text-Modus ausgeblendet) -->
+    <div id="videoSection">
+      <p>
+        <strong>Fremder:</strong><br>
+        <video id="remoteVideo" autoplay playsinline></video>
+      </p>
 
-    <p>
-      <strong>Du:</strong><br>
-      <video id="localVideo" autoplay playsinline muted></video>
-    </p>
+      <p>
+        <strong>Du:</strong><br>
+        <video id="localVideo" autoplay playsinline muted></video>
+      </p>
+    </div>
 
     <div id="chatMessages" class="chat-box"></div>
 

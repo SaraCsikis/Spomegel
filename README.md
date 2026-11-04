@@ -1,19 +1,21 @@
 # Spomegel
 
-Sprach-Omegle: Simple text chat for language exchange with strangers.
+Sprach-Omegle: Einfacher Video- und Text-Chat für Sprachaustausch mit Fremden.
 
-## Features
-- Select your native language, target language, level, and topic.
-- Connect with a random stranger to practice.
-- 10-minute conversation timer.
-- Built-in questions and vocabulary helpers.
-- Personal notes section (auto-saved in browser).
-- "Next Stranger" (Esc) and "Disconnect" buttons.
+## Funktionen
+- **Modus zu Beginn wählbar**: Wähle direkt auf der Startseite zwischen **Video** und **Nur Text**.
+- **Strenges Matchmaking**: 
+  - Video-Nutzer werden nur mit Video-Nutzern verbunden.
+  - Text-Nutzer werden nur mit Text-Nutzern verbunden.
+  - Verbindet nur Personen mit passenden Sprachen (entweder echter Tandem-Austausch oder gemeinsame Zielsprache). Keine Zufallsverbindungen mit unpassenden Sprachen.
+- **Kennenlernfragen & Wortschatz-Hilfe**: Auf das Sprachniveau abgestimmte Einstiegsfragen und nützliche Vokabeln.
+- **Eigene Notizen**: Automatisches Speichern im Browser (`localStorage`).
+- **Nächster Fremder (Esc)** & **Trennen**: Jederzeit sofort zum nächsten Partner wechseln oder abbrechen.
 
-## How to Test
-1. Open `index.html` in Tab 1 and click **Find Stranger**.
-2. Open `index.html` in Tab 2 and click **Find Stranger**.
-3. Both tabs will instantly connect so you can chat.
+## Verbindung testen (in 10 Sekunden)
+1. Öffne `index.html` in **Tab 1** (z. B. Muttersprache: Deutsch, Zielsprache: Französisch) und klicke auf **Partner suchen**.
+2. Öffne `index.html` in **Tab 2** (Muttersprache: Französisch, Zielsprache: Deutsch) und klicke auf **Partner suchen**.
+3. Beide Tabs verbinden sich sofort passend miteinander!
 
-## How to Run
-Just open `index.html` in any web browser.
+## Ausführen
+Einfach `index.html` in einem beliebigen Browser öffnen.

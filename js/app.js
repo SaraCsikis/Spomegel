@@ -1,5 +1,5 @@
 /**
- * Spomegel - Video & Text Chat mit Matchmaking (Deutsch & Minimal)
+ * Spomegel - Video & Text Chat mit strengem Matchmaking (Deutsch & Minimal)
  */
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -19,7 +19,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const skipBtn = document.getElementById("skipBtn");
   const leaveBtn = document.getElementById("leaveBtn");
 
-  // Video-Elemente
+  // Video-Bereich
+  const videoSection = document.getElementById("videoSection");
   const localVideo = document.getElementById("localVideo");
   const remoteVideo = document.getElementById("remoteVideo");
 
@@ -28,8 +29,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const chatInput = document.getElementById("chatInput");
   const chatSendBtn = document.getElementById("chatSendBtn");
 
-  // Status & Timer
-  const timerDisplay = document.getElementById("timerDisplay");
+  // Status
   const practiceBanner = document.getElementById("practiceBanner");
   const searchStatusText = document.getElementById("searchStatusText");
 
@@ -49,9 +49,9 @@ document.addEventListener("DOMContentLoaded", () => {
   let currentRoomId = null;
   let state = "idle"; // "idle" | "searching" | "matched"
   let searchInterval = null;
-  let searchStartTime = 0;
 
   let profile = {
+    mode: "video", // "video" | "text"
     nativeLang: "de",
     targetLang: "fr",
     level: "B1",
@@ -62,12 +62,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let questionIndex = 0;
   let vocabOffset = 0;
 
-  // 10-Minuten-Timer (600 Sekunden)
-  const TOTAL_SECONDS = 600;
-  let timerRemaining = TOTAL_SECONDS;
-  let timerInterval = null;
-
-  // Kamera & Mikrofon starten
+  // Kamera starten (nur bei Video-Modus)
   async function initCamera() {
     if (localStream) return localStream;
     try {
@@ -106,7 +101,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     peer.on("call", (incomingCall) => {
-      console.log("Eingehender Video-Anruf von:", incomingCall.peer);
       currentCall = incomingCall;
       incomingCall.answer(localStream || undefined);
 
@@ -132,7 +126,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (mqttClient && mqttClient.connected) return;
 
     mqttClient = mqtt.connect("wss://broker.emqx.io:8084/mqtt", {
-      clientId: `spm_${myId}_${Math.random().toString(16).substring(2, 6)}`,
+      clientId: `spm_${myPeerId}_${Math.random().toString(16).substring(2, 6)}`,
       clean: true,
       reconnectPeriod: 2500
     });
@@ -171,34 +165,48 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  /**
+   * STRENGES MATCHMAKING:
+   * 1. Modus MUSS identisch sein (Video nur mit Video, Text nur mit Text).
+   * 2. Sprache MUSS passen:
+   *    - Tandem: Kandidat spricht meine Zielsprache und lernt meine Muttersprache
+   *    - ODER: Beide lernen dieselbe Zielsprache
+   * Keine Zufallsausweichung auf beliebige Fremde!
+   */
   function checkMatchCandidate(candidate) {
     if (state !== "searching") return;
 
-    const waitSec = (Date.now() - searchStartTime) / 1000;
-    const isComplementary =
+    // 1. Modus prüfen
+    if (candidate.mode !== profile.mode) return;
+
+    // 2. Sprachen prüfen
+    const isTandemMatch =
       candidate.nativeLang === profile.targetLang &&
       candidate.targetLang === profile.nativeLang;
 
-    const isSameTarget = candidate.targetLang === profile.targetLang;
-    const isRelaxed = waitSec > 6;
+    const isSharedPractice = candidate.targetLang === profile.targetLang;
 
-    if (isComplementary || isSameTarget || isRelaxed) {
-      if (myPeerId > candidate.id) {
-        const roomId = "room_" + Math.random().toString(36).substring(2, 9);
-        partnerPeerId = candidate.id;
+    // Nur verbinden, wenn die Sprache wirklich passt!
+    if (!isTandemMatch && !isSharedPractice) {
+      return; // Kein Match! Warte weiter.
+    }
 
-        mqttClient.publish(
-          `spomegel/user/${candidate.id}`,
-          JSON.stringify({
-            type: "INVITE",
-            from: myPeerId,
-            roomId: roomId,
-            partnerProfile: profile
-          })
-        );
+    // Tie-Breaker: User mit größerer ID sendet die Einladung
+    if (myPeerId > candidate.id) {
+      const roomId = "room_" + Math.random().toString(36).substring(2, 9);
+      partnerPeerId = candidate.id;
 
-        joinRoom(roomId, candidate, true);
-      }
+      mqttClient.publish(
+        `spomegel/user/${candidate.id}`,
+        JSON.stringify({
+          type: "INVITE",
+          from: myPeerId,
+          roomId: roomId,
+          partnerProfile: profile
+        })
+      );
+
+      joinRoom(roomId, candidate, true);
     }
   }
 
@@ -212,22 +220,27 @@ document.addEventListener("DOMContentLoaded", () => {
       mqttClient.subscribe(`spomegel/room/${roomId}`, { qos: 1 });
     }
 
-    // Video-Verbindung aufbauen
-    if (isInitiator && partnerPeerId && localStream && peer) {
-      setTimeout(() => {
-        console.log("Starte Video-Anruf zu:", partnerPeerId);
-        const call = peer.call(partnerPeerId, localStream);
-        currentCall = call;
-        call.on("stream", (remoteStream) => {
-          if (remoteVideo) {
-            remoteVideo.srcObject = remoteStream;
-            remoteVideo.play().catch(() => {});
-          }
-        });
-        call.on("close", () => {
-          if (remoteVideo) remoteVideo.srcObject = null;
-        });
-      }, 500);
+    // Video-Verbindung nur im Video-Modus
+    if (profile.mode === "video") {
+      videoSection.classList.remove("hidden");
+      if (isInitiator && partnerPeerId && localStream && peer) {
+        setTimeout(() => {
+          const call = peer.call(partnerPeerId, localStream);
+          currentCall = call;
+          call.on("stream", (remoteStream) => {
+            if (remoteVideo) {
+              remoteVideo.srcObject = remoteStream;
+              remoteVideo.play().catch(() => {});
+            }
+          });
+          call.on("close", () => {
+            if (remoteVideo) remoteVideo.srcObject = null;
+          });
+        }, 500);
+      }
+    } else {
+      // Nur Text: Video-Bereich verstecken
+      videoSection.classList.add("hidden");
     }
 
     // UI umschalten
@@ -237,13 +250,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     clearChat();
     appendSystemMessage("Du bist jetzt mit einem Fremden verbunden. Sag Hallo!");
-    startTimer();
     setupPracticeDeck(partnerProfile);
   }
 
   async function startSearch() {
     state = "searching";
-    searchStartTime = Date.now();
     currentRoomId = null;
     partnerPeerId = null;
 
@@ -252,11 +263,15 @@ document.addEventListener("DOMContentLoaded", () => {
     callRoom.classList.add("hidden");
 
     if (searchStatusText) {
-      searchStatusText.textContent = "Kamera aktivieren und nach Partner suchen...";
+      searchStatusText.textContent = profile.mode === "video" 
+        ? "Kamera aktivieren und nach passendem Partner suchen..."
+        : "Nach passendem Text-Partner im Netzwerk suchen...";
     }
 
-    await initCamera();
-    initPeer();
+    if (profile.mode === "video") {
+      await initCamera();
+      initPeer();
+    }
     connectBroker();
 
     if (mqttClient && mqttClient.connected) {
@@ -279,6 +294,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const payload = {
       id: myPeerId,
+      mode: profile.mode,
       nativeLang: profile.nativeLang,
       targetLang: profile.targetLang,
       level: profile.level,
@@ -310,9 +326,8 @@ document.addEventListener("DOMContentLoaded", () => {
     partnerPeerId = null;
     clearInterval(searchInterval);
     cleanupCall();
-    resetTimer();
 
-    // Kamera stoppen
+    // Kamera stoppen falls aktiv
     if (localStream) {
       localStream.getTracks().forEach(t => t.stop());
       localStream = null;
@@ -333,12 +348,12 @@ document.addEventListener("DOMContentLoaded", () => {
       mqttClient.unsubscribe(`spomegel/room/${currentRoomId}`);
     }
     cleanupCall();
-    resetTimer();
     startSearch();
   }
 
   // Event Listener
   startBtn.addEventListener("click", () => {
+    profile.mode = document.querySelector('input[name="mode"]:checked')?.value || "video";
     profile.nativeLang = document.getElementById("nativeLang").value;
     profile.targetLang = document.getElementById("targetLang").value;
     profile.level = document.getElementById("levelSelect").value;
@@ -410,45 +425,7 @@ document.addEventListener("DOMContentLoaded", () => {
     chatMessages.innerHTML = "";
   }
 
-  // 10-Minuten-Timer
-  function startTimer() {
-    resetTimer();
-    timerRemaining = TOTAL_SECONDS;
-    updateTimerDisplay();
-
-    timerInterval = setInterval(() => {
-      timerRemaining--;
-      updateTimerDisplay();
-
-      if (timerRemaining <= 0) {
-        clearInterval(timerInterval);
-        appendSystemMessage("10 Minuten erreicht! Tolles Gespräch. Ihr könnt weiterreden oder auf Nächster Fremder klicken.");
-      }
-    }, 1000);
-  }
-
-  function resetTimer() {
-    clearInterval(timerInterval);
-    timerRemaining = TOTAL_SECONDS;
-    updateTimerDisplay();
-  }
-
-  function updateTimerDisplay() {
-    const mins = Math.floor(timerRemaining / 60);
-    const secs = timerRemaining % 60;
-    const formatted = `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
-    if (timerDisplay) {
-      timerDisplay.textContent = formatted;
-      timerDisplay.classList.remove("warning", "danger");
-      if (timerRemaining <= 60) {
-        timerDisplay.classList.add("danger");
-      } else if (timerRemaining <= 180) {
-        timerDisplay.classList.add("warning");
-      }
-    }
-  }
-
-  // Deck & Wortschatz
+  // Banner & Wortschatz
   function setupPracticeDeck(partnerProfile) {
     const level = profile.level || "B1";
     const targetLang = profile.targetLang || "fr";
@@ -458,7 +435,12 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     if (practiceBanner) {
-      practiceBanner.textContent = `Du übst: ${langNames[targetLang] || targetLang} (${level})`;
+      const isTandem = partnerProfile && partnerProfile.nativeLang === targetLang;
+      if (isTandem) {
+        practiceBanner.textContent = `Du übst: ${langNames[targetLang] || targetLang} (${level}) | Partner ist Muttersprachler (${langNames[partnerProfile.nativeLang]})`;
+      } else {
+        practiceBanner.textContent = `Du übst: ${langNames[targetLang] || targetLang} (${level})`;
+      }
     }
 
     if (window.getPromptDeck) {

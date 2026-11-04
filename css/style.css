@@ -71,16 +71,6 @@ video {
   font-size: 13px;
 }
 
-.timer.warning {
-  color: orange;
-  font-weight: bold;
-}
-
-.timer.danger {
-  color: red;
-  font-weight: bold;
-}
-
 ul {
   padding-left: 20px;
   margin: 6px 0;
