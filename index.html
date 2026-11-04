@@ -1,1 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spomegel - Sprach Omegle</title>
+  <link rel="stylesheet" href="css/style.css">
+  
+  <!-- PeerJS for direct WebRTC video/audio/data connections -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <!-- MQTT.js for public serverless matchmaking queue on Vercel -->
+  <script src="https://unpkg.com/mqtt@5.3.4/dist/mqtt.min.js"></script>
+</head>
+<body>
 
+  <!-- App Header -->
+  <header class="app-header">
+    <div class="brand">
+      <span class="logo-icon">🌐</span>
+      <h1>Spomegel</h1>
+      <span class="tagline">Sprach-Omegle</span>
+    </div>
+    <div class="header-right">
+      <div id="timerDisplay" class="timer-badge">
+        <span>⏱️</span> 10:00
+      </div>
+    </div>
+  </header>
+
+  <!-- Main App Layout -->
+  <main class="main-content">
+
+    <!-- Screen 1: Lobby & Setup -->
+    <section id="lobbyScreen" class="screen">
+      <div class="lobby-card">
+        <h2 class="lobby-title">Find a Language Partner</h2>
+        <p class="lobby-subtitle">Connect with strangers around the world to practice speaking live.</p>
+
+        <!-- Communication Mode -->
+        <div class="form-group">
+          <label>1. Communication Mode</label>
+          <div class="mode-picker">
+            <label class="mode-option">
+              <input type="radio" name="mode" value="video" checked>
+              <div class="mode-box">
+                <span class="mode-icon">📹</span>
+                <span class="mode-label">Video</span>
+              </div>
+            </label>
+            <label class="mode-option">
+              <input type="radio" name="mode" value="audio">
+              <div class="mode-box">
+                <span class="mode-icon">🎙️</span>
+                <span class="mode-label">Audio Only</span>
+              </div>
+            </label>
+            <label class="mode-option">
+              <input type="radio" name="mode" value="text">
+              <div class="mode-box">
+                <span class="mode-icon">💬</span>
+                <span class="mode-label">Text Chat</span>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- Languages Row -->
+        <div class="form-row">
+          <div class="form-group">
+            <label for="nativeLang">I Speak (Native / Fluent)</label>
+            <select id="nativeLang">
+              <option value="de" selected>German (Deutsch)</option>
+              <option value="en">English</option>
+              <option value="fr">French (Français)</option>
+              <option value="es">Spanish (Español)</option>
+              <option value="it">Italian (Italiano)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="targetLang">I Want to Learn</label>
+            <select id="targetLang">
+              <option value="fr" selected>French (Français)</option>
+              <option value="en">English</option>
+              <option value="de">German (Deutsch)</option>
+              <option value="es">Spanish (Español)</option>
+              <option value="it">Italian (Italiano)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Level & Motivation -->
+        <div class="form-row">
+          <div class="form-group">
+            <label for="levelSelect">My Level</label>
+            <select id="levelSelect">
+              <option value="A1">A1 - Complete Beginner</option>
+              <option value="A2">A2 - Elementary</option>
+              <option value="B1" selected>B1 - Intermediate</option>
+              <option value="B2">B2 - Upper-Intermediate</option>
+              <option value="C1">C1 - Advanced</option>
+              <option value="C2">C2 - Fluent / Native-like</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="motivationSelect">Learning Goal</label>
+            <select id="motivationSelect">
+              <option value="casual">Casual (Just for fun)</option>
+              <option value="regular" selected>Regular (School / Travel)</option>
+              <option value="intensive">Intensive (Career / Relocation)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Topic Selector -->
+        <div class="form-group">
+          <label for="topicSelect">Conversation Topic</label>
+          <select id="topicSelect">
+            <option value="travel" selected>✈️ Travel & Holidays</option>
+            <option value="daily">☕ Daily Life & Habits</option>
+            <option value="food">🍕 Food & Cooking</option>
+            <option value="culture">🎭 Culture & Traditions</option>
+            <option value="deep">💡 Deep Questions & Philosophy</option>
+          </select>
+        </div>
+
+        <button id="startBtn" class="btn-primary">Start Matching 🚀</button>
+      </div>
+    </section>
+
+    <!-- Screen 2: Searching Radar Overlay -->
+    <div id="searchOverlay" class="hidden">
+      <div class="radar-spinner"></div>
+      <h3 class="search-title">Searching for Stranger...</h3>
+      <p id="searchStatusText" class="search-desc">Finding someone who wants to exchange languages with you...</p>
+      <button id="cancelSearchBtn" class="btn-secondary">Cancel</button>
+    </div>
+
+    <!-- Screen 3: In-Call Video Room -->
+    <section id="callRoom" class="screen hidden">
+      
+      <!-- Video Section -->
+      <div class="video-section">
+        <!-- Language Practice Banner -->
+        <div id="practiceBanner" class="practice-banner">
+          🎯 <strong>You are practicing:</strong> French (B1) | <strong>Topic:</strong> TRAVEL
+        </div>
+
+        <!-- Main Video Frame -->
+        <div class="video-container">
+          <video id="remoteVideo" autoplay playsinline></video>
+          
+          <div id="videoPlaceholder" class="video-placeholder">
+            <div class="placeholder-avatar">🗣️</div>
+            <p>Connected with partner</p>
+          </div>
+
+          <!-- PiP Local Video Preview -->
+          <div class="pip-video">
+            <video id="localVideo" autoplay playsinline muted></video>
+          </div>
+        </div>
+
+        <!-- Bottom Call Control Bar -->
+        <div class="control-bar">
+          <button id="skipBtn" class="btn-ctrl btn-next" title="Press Esc to skip">
+            ⏭️ Next Partner (Esc)
+          </button>
+          <button id="micToggleBtn" class="btn-ctrl">
+            🎤 Mic On
+          </button>
+          <button id="camToggleBtn" class="btn-ctrl">
+            📹 Cam On
+          </button>
+          <button id="leaveBtn" class="btn-ctrl btn-danger">
+            🚪 Leave
+          </button>
+        </div>
+      </div>
+
+      <!-- Right Sidebar (Tabs) -->
+      <aside class="sidebar">
+        <nav class="sidebar-tabs">
+          <button class="tab-btn active" data-tab="topicPanel">📚 Topic & Vocab</button>
+          <button class="tab-btn" data-tab="chatPanel">💬 Chat</button>
+          <button class="tab-btn" data-tab="notesPanel">📝 Notes</button>
+        </nav>
+
+        <div class="tab-content">
+          <!-- Tab 1: Topic & Vocab -->
+          <div id="topicPanel" class="tab-panel active">
+            <div class="panel-title">
+              <span id="currentTopicTitle">✈️ Travel & Holidays</span>
+            </div>
+
+            <!-- Dynamic Question Deck -->
+            <div class="question-box">
+              <div class="question-label">Icebreaker / Prompt</div>
+              <p id="currentQuestionText" class="question-text">Introduce yourself: What is your name and where are you from?</p>
+              <button id="nextQuestionBtn" class="btn-small">🔄 Next Question</button>
+            </div>
+
+            <!-- Vocabulary Cheat Sheet -->
+            <div class="panel-title" style="margin-top: 1rem;">
+              <span>Vocab Cheat Sheet</span>
+              <button id="nextVocabBtn" class="btn-small">More Words</button>
+            </div>
+            <div id="vocabCardsContainer" class="vocab-container">
+              <!-- Rendered via JS -->
+            </div>
+          </div>
+
+          <!-- Tab 2: Live Chat -->
+          <div id="chatPanel" class="tab-panel">
+            <div id="chatMessages" class="chat-messages">
+              <div class="chat-system-msg">Connected to chat. Say hi!</div>
+            </div>
+            <div class="chat-input-row">
+              <input type="text" id="chatInput" placeholder="Type a message...">
+              <button id="chatSendBtn">Send</button>
+            </div>
+          </div>
+
+          <!-- Tab 3: Personal Notes -->
+          <div id="notesPanel" class="tab-panel">
+            <div class="panel-title">
+              <span>Personal Notes</span>
+              <span id="notesSaveStatus" class="notes-status"></span>
+            </div>
+            <textarea id="notesTextarea" class="notes-textarea" placeholder="Jot down new vocabulary, grammar corrections, or partner tips here... Automatically saved in your browser!"></textarea>
+            <div class="notes-footer">
+              <button id="notesClearBtn" class="btn-small">Clear</button>
+              <div class="notes-actions">
+                <button id="notesCopyBtn" class="btn-small">Copy</button>
+                <button id="notesDownloadBtn" class="btn-small">Download .txt</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+    </section>
+
+  </main>
+
+  <!-- Scripts -->
+  <script src="js/prompts.js"></script>
+  <script src="js/notes.js"></script>
+  <script src="js/signaling.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

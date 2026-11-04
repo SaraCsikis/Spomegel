@@ -1,0 +1,16 @@
+{
+  "name": "spomegel",
+  "version": "1.0.0",
+  "description": "Sprach Omegle - Language exchange with strangers via video, audio and text",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": ["webrtc", "language-learning", "omegle", "video-chat"],
+  "author": "Spomegel Team",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
