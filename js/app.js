@@ -1,15 +1,14 @@
 /**
- * Spomegel - Ultra-Simple Text Chat & Matchmaking Engine
- * Uses public MQTT over WebSockets for instant, zero-server stranger pairing
+ * Spomegel - Video & Text Chat mit Matchmaking (Deutsch & Minimal)
  */
 
 document.addEventListener("DOMContentLoaded", () => {
-  // Initialize Notes Module
+  // Notizen-Modul initialisieren
   if (window.NotesModule) {
     window.NotesModule.init();
   }
 
-  // Screens
+  // Bildschirme
   const lobbyScreen = document.getElementById("lobbyScreen");
   const callRoom = document.getElementById("callRoom");
   const searchOverlay = document.getElementById("searchOverlay");
@@ -20,7 +19,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const skipBtn = document.getElementById("skipBtn");
   const leaveBtn = document.getElementById("leaveBtn");
 
-  // Chat Elements
+  // Video-Elemente
+  const localVideo = document.getElementById("localVideo");
+  const remoteVideo = document.getElementById("remoteVideo");
+
+  // Chat-Elemente
   const chatMessages = document.getElementById("chatMessages");
   const chatInput = document.getElementById("chatInput");
   const chatSendBtn = document.getElementById("chatSendBtn");
@@ -30,16 +33,19 @@ document.addEventListener("DOMContentLoaded", () => {
   const practiceBanner = document.getElementById("practiceBanner");
   const searchStatusText = document.getElementById("searchStatusText");
 
-  // Topic & Vocab
-  const currentTopicTitle = document.getElementById("currentTopicTitle");
+  // Fragen & Wortschatz
   const currentQuestionText = document.getElementById("currentQuestionText");
   const nextQuestionBtn = document.getElementById("nextQuestionBtn");
   const vocabCardsContainer = document.getElementById("vocabCardsContainer");
   const nextVocabBtn = document.getElementById("nextVocabBtn");
 
-  // State
+  // Status-Variablen
   let mqttClient = null;
-  let myId = "user_" + Math.random().toString(36).substring(2, 8);
+  let peer = null;
+  let myPeerId = "user_" + Math.random().toString(36).substring(2, 8);
+  let partnerPeerId = null;
+  let currentCall = null;
+  let localStream = null;
   let currentRoomId = null;
   let state = "idle"; // "idle" | "searching" | "matched"
   let searchInterval = null;
@@ -49,24 +55,82 @@ document.addEventListener("DOMContentLoaded", () => {
     nativeLang: "de",
     targetLang: "fr",
     level: "B1",
-    motivation: "regular",
-    topic: "travel"
+    motivation: "regular"
   };
 
   let currentDeck = null;
   let questionIndex = 0;
   let vocabOffset = 0;
 
-  // 10-Minute Timer (600s)
+  // 10-Minuten-Timer (600 Sekunden)
   const TOTAL_SECONDS = 600;
   let timerRemaining = TOTAL_SECONDS;
   let timerInterval = null;
 
-  // Connect to public secure MQTT broker
+  // Kamera & Mikrofon starten
+  async function initCamera() {
+    if (localStream) return localStream;
+    try {
+      localStream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 320, height: 240 },
+        audio: true
+      });
+      if (localVideo) {
+        localVideo.srcObject = localStream;
+        localVideo.play().catch(() => {});
+      }
+      return localStream;
+    } catch (err) {
+      console.warn("Kamera konnte nicht aktiviert werden:", err);
+      return null;
+    }
+  }
+
+  // PeerJS für Video initialisieren
+  function initPeer() {
+    if (peer && !peer.destroyed) return;
+
+    peer = new Peer(myPeerId, {
+      debug: 1,
+      config: {
+        iceServers: [
+          { urls: "stun:stun.l.google.com:19302" },
+          { urls: "stun:global.stun.twilio.com:3478" }
+        ]
+      }
+    });
+
+    peer.on("open", (id) => {
+      myPeerId = id;
+      console.log("PeerJS bereit mit ID:", id);
+    });
+
+    peer.on("call", (incomingCall) => {
+      console.log("Eingehender Video-Anruf von:", incomingCall.peer);
+      currentCall = incomingCall;
+      incomingCall.answer(localStream || undefined);
+
+      incomingCall.on("stream", (remoteStream) => {
+        if (remoteVideo) {
+          remoteVideo.srcObject = remoteStream;
+          remoteVideo.play().catch(() => {});
+        }
+      });
+
+      incomingCall.on("close", () => {
+        if (remoteVideo) remoteVideo.srcObject = null;
+      });
+    });
+
+    peer.on("error", (err) => {
+      console.warn("PeerJS Hinweis:", err.type || err.message);
+    });
+  }
+
+  // MQTT-Verbindung für Matchmaking & Textchat
   function connectBroker() {
     if (mqttClient && mqttClient.connected) return;
 
-    // Connect to EMQX public websocket broker
     mqttClient = mqtt.connect("wss://broker.emqx.io:8084/mqtt", {
       clientId: `spm_${myId}_${Math.random().toString(16).substring(2, 6)}`,
       clean: true,
@@ -74,46 +138,32 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     mqttClient.on("connect", () => {
-      console.log("Connected to Spomegel network. My ID:", myId);
-      // Subscribe to private channel for match invitations
-      mqttClient.subscribe(`spomegel/user/${myId}`, { qos: 1 });
+      mqttClient.subscribe(`spomegel/user/${myPeerId}`, { qos: 1 });
     });
 
     mqttClient.on("message", (topic, payload) => {
       try {
         const data = JSON.parse(payload.toString());
         handleIncomingMessage(topic, data);
-      } catch (e) {
-        // Ignore unparseable
-      }
-    });
-
-    mqttClient.on("error", (err) => {
-      console.warn("Network notice:", err.message);
+      } catch (e) {}
     });
   }
 
-  // Handle incoming messages
   function handleIncomingMessage(topic, data) {
-    // 1. Direct invitation received
-    if (topic === `spomegel/user/${myId}`) {
+    if (topic === `spomegel/user/${myPeerId}`) {
       if (data.type === "INVITE" && state === "searching") {
-        console.log("Matched with partner via invite from:", data.from);
-        joinRoom(data.roomId, data.partnerProfile);
+        partnerPeerId = data.from;
+        joinRoom(data.roomId, data.partnerProfile, false);
       }
-    }
-    // 2. Queue broadcast
-    else if (topic === "spomegel/queue") {
-      if (state === "searching" && data.id && data.id !== myId) {
+    } else if (topic === "spomegel/queue") {
+      if (state === "searching" && data.id && data.id !== myPeerId) {
         checkMatchCandidate(data);
       }
-    }
-    // 3. In-Room Chat Message or Command
-    else if (topic === `spomegel/room/${currentRoomId}`) {
+    } else if (topic === `spomegel/room/${currentRoomId}`) {
       if (data.type === "CHAT") {
-        appendChatMessage(data.text, data.senderId === myId ? "me" : "partner");
+        appendChatMessage(data.text, data.senderId === myPeerId ? "me" : "partner");
       } else if (data.type === "LEAVE") {
-        appendSystemMessage("Stranger has disconnected.");
+        appendSystemMessage("Der Fremde hat die Verbindung getrennt.");
         setTimeout(() => {
           if (state === "matched") startSearch();
         }, 1200);
@@ -121,45 +171,38 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // Check if someone in the queue matches our criteria
   function checkMatchCandidate(candidate) {
     if (state !== "searching") return;
 
     const waitSec = (Date.now() - searchStartTime) / 1000;
-
-    // Check language match
     const isComplementary =
       candidate.nativeLang === profile.targetLang &&
       candidate.targetLang === profile.nativeLang;
 
     const isSameTarget = candidate.targetLang === profile.targetLang;
-    const isRelaxedMatch = waitSec > 6; // Pair with anyone waiting if > 6s
+    const isRelaxed = waitSec > 6;
 
-    if (isComplementary || isSameTarget || isRelaxedMatch) {
-      // Deterministic tie-breaker: user with higher ID creates room
-      if (myId > candidate.id) {
+    if (isComplementary || isSameTarget || isRelaxed) {
+      if (myPeerId > candidate.id) {
         const roomId = "room_" + Math.random().toString(36).substring(2, 9);
-        console.log("Inviting candidate:", candidate.id, "to room:", roomId);
+        partnerPeerId = candidate.id;
 
-        // Send direct invite
         mqttClient.publish(
           `spomegel/user/${candidate.id}`,
           JSON.stringify({
             type: "INVITE",
-            from: myId,
+            from: myPeerId,
             roomId: roomId,
             partnerProfile: profile
           })
         );
 
-        // Join room ourselves
-        joinRoom(roomId, candidate);
+        joinRoom(roomId, candidate, true);
       }
     }
   }
 
-  // Join chat room
-  function joinRoom(roomId, partnerProfile) {
+  function joinRoom(roomId, partnerProfile, isInitiator) {
     state = "matched";
     currentRoomId = roomId;
 
@@ -169,40 +212,57 @@ document.addEventListener("DOMContentLoaded", () => {
       mqttClient.subscribe(`spomegel/room/${roomId}`, { qos: 1 });
     }
 
-    // Switch UI
+    // Video-Verbindung aufbauen
+    if (isInitiator && partnerPeerId && localStream && peer) {
+      setTimeout(() => {
+        console.log("Starte Video-Anruf zu:", partnerPeerId);
+        const call = peer.call(partnerPeerId, localStream);
+        currentCall = call;
+        call.on("stream", (remoteStream) => {
+          if (remoteVideo) {
+            remoteVideo.srcObject = remoteStream;
+            remoteVideo.play().catch(() => {});
+          }
+        });
+        call.on("close", () => {
+          if (remoteVideo) remoteVideo.srcObject = null;
+        });
+      }, 500);
+    }
+
+    // UI umschalten
     searchOverlay.classList.add("hidden");
     lobbyScreen.classList.add("hidden");
     callRoom.classList.remove("hidden");
 
-    // Setup chat & deck
     clearChat();
-    appendSystemMessage("You are now connected with a stranger! Say hi!");
+    appendSystemMessage("Du bist jetzt mit einem Fremden verbunden. Sag Hallo!");
     startTimer();
     setupPracticeDeck(partnerProfile);
   }
 
-  // Start Searching
-  function startSearch() {
+  async function startSearch() {
     state = "searching";
     searchStartTime = Date.now();
     currentRoomId = null;
+    partnerPeerId = null;
 
     searchOverlay.classList.remove("hidden");
     lobbyScreen.classList.add("hidden");
     callRoom.classList.add("hidden");
 
     if (searchStatusText) {
-      searchStatusText.textContent = "Looking for someone to practice with...";
+      searchStatusText.textContent = "Kamera aktivieren und nach Partner suchen...";
     }
 
+    await initCamera();
+    initPeer();
     connectBroker();
 
-    // Subscribe to matchmaking queue
     if (mqttClient && mqttClient.connected) {
       mqttClient.subscribe("spomegel/queue", { qos: 0 });
     }
 
-    // Broadcast presence every 2 seconds
     broadcastQueuePresence();
     clearInterval(searchInterval);
     searchInterval = setInterval(() => {
@@ -218,18 +278,24 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!mqttClient || !mqttClient.connected || state !== "searching") return;
 
     const payload = {
-      id: myId,
+      id: myPeerId,
       nativeLang: profile.nativeLang,
       targetLang: profile.targetLang,
       level: profile.level,
-      topic: profile.topic,
       timestamp: Date.now()
     };
 
     mqttClient.publish("spomegel/queue", JSON.stringify(payload));
   }
 
-  // Disconnect / Leave
+  function cleanupCall() {
+    if (currentCall) {
+      try { currentCall.close(); } catch(e) {}
+      currentCall = null;
+    }
+    if (remoteVideo) remoteVideo.srcObject = null;
+  }
+
   function leave() {
     if (currentRoomId && mqttClient) {
       mqttClient.publish(
@@ -241,15 +307,23 @@ document.addEventListener("DOMContentLoaded", () => {
 
     state = "idle";
     currentRoomId = null;
+    partnerPeerId = null;
     clearInterval(searchInterval);
+    cleanupCall();
     resetTimer();
+
+    // Kamera stoppen
+    if (localStream) {
+      localStream.getTracks().forEach(t => t.stop());
+      localStream = null;
+    }
+    if (localVideo) localVideo.srcObject = null;
 
     searchOverlay.classList.add("hidden");
     callRoom.classList.add("hidden");
     lobbyScreen.classList.remove("hidden");
   }
 
-  // Skip / Next
   function skip() {
     if (currentRoomId && mqttClient) {
       mqttClient.publish(
@@ -258,20 +332,20 @@ document.addEventListener("DOMContentLoaded", () => {
       );
       mqttClient.unsubscribe(`spomegel/room/${currentRoomId}`);
     }
+    cleanupCall();
     resetTimer();
     startSearch();
   }
 
-  // UI Event Handlers
+  // Event Listener
   startBtn.addEventListener("click", () => {
     profile.nativeLang = document.getElementById("nativeLang").value;
     profile.targetLang = document.getElementById("targetLang").value;
     profile.level = document.getElementById("levelSelect").value;
     profile.motivation = document.getElementById("motivationSelect").value;
-    profile.topic = document.getElementById("topicSelect").value;
 
     if (profile.nativeLang === profile.targetLang) {
-      alert("Please choose a target language different from your native language!");
+      alert("Bitte wähle eine Zielsprache, die sich von deiner Muttersprache unterscheidet!");
       return;
     }
 
@@ -280,14 +354,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
   cancelSearchBtn.addEventListener("click", leave);
   leaveBtn.addEventListener("click", () => {
-    if (confirm("Disconnect and return to the start screen?")) {
+    if (confirm("Verbindung trennen und zur Startseite zurückkehren?")) {
       leave();
     }
   });
 
   skipBtn.addEventListener("click", skip);
 
-  // Chat input
   function sendChat() {
     const text = chatInput.value.trim();
     if (!text || !currentRoomId || !mqttClient) return;
@@ -296,7 +369,7 @@ document.addEventListener("DOMContentLoaded", () => {
       `spomegel/room/${currentRoomId}`,
       JSON.stringify({
         type: "CHAT",
-        senderId: myId,
+        senderId: myPeerId,
         text: text
       })
     );
@@ -309,7 +382,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.key === "Enter") sendChat();
   });
 
-  // Hotkey: Esc to skip
   window.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && state === "matched") {
       skip();
@@ -319,7 +391,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function appendChatMessage(text, sender) {
     const div = document.createElement("div");
     div.className = `chat-msg ${sender}`;
-    const label = sender === "me" ? "You: " : "Stranger: ";
+    const label = sender === "me" ? "Du: " : "Fremder: ";
     div.innerHTML = `<strong>${label}</strong><span class="msg-text"></span>`;
     div.querySelector(".msg-text").textContent = text;
     chatMessages.appendChild(div);
@@ -338,7 +410,7 @@ document.addEventListener("DOMContentLoaded", () => {
     chatMessages.innerHTML = "";
   }
 
-  // 10-Minute Timer
+  // 10-Minuten-Timer
   function startTimer() {
     resetTimer();
     timerRemaining = TOTAL_SECONDS;
@@ -350,7 +422,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (timerRemaining <= 0) {
         clearInterval(timerInterval);
-        appendSystemMessage("⏰ 10 minutes reached! Great conversation. Continue or click Next Stranger.");
+        appendSystemMessage("10 Minuten erreicht! Tolles Gespräch. Ihr könnt weiterreden oder auf Nächster Fremder klicken.");
       }
     }, 1000);
   }
@@ -376,29 +448,24 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // Setup Topic & Vocab Deck
+  // Deck & Wortschatz
   function setupPracticeDeck(partnerProfile) {
-    const topicId = profile.topic || "travel";
     const level = profile.level || "B1";
     const targetLang = profile.targetLang || "fr";
 
     const langNames = {
-      en: "English", de: "German", fr: "French", es: "Spanish", it: "Italian"
+      en: "Englisch", de: "Deutsch", fr: "Französisch", es: "Spanisch", it: "Italienisch"
     };
 
     if (practiceBanner) {
-      practiceBanner.innerHTML = `
-        <span>🎯 <strong>You are practicing:</strong> ${langNames[targetLang] || targetLang} (${level})</span>
-        <span><strong>Topic:</strong> ${topicId.toUpperCase()}</span>
-      `;
+      practiceBanner.textContent = `Du übst: ${langNames[targetLang] || targetLang} (${level})`;
     }
 
     if (window.getPromptDeck) {
-      currentDeck = window.getPromptDeck(topicId, level, targetLang);
+      currentDeck = window.getPromptDeck(level, targetLang);
       questionIndex = 0;
       vocabOffset = 0;
 
-      if (currentTopicTitle) currentTopicTitle.textContent = currentDeck.topicTitle;
       renderCurrentQuestion();
       renderVocabCards();
     }
@@ -431,7 +498,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const li = document.createElement("li");
       li.innerHTML = `
         <span><strong>${item.word}</strong>: <em>"${item.example}"</em></span>
-        <button class="small vocab-add-btn" title="Save to notes">+ Note</button>
+        <button class="small vocab-add-btn" title="Zu Notizen hinzufügen">+ Notiz</button>
       `;
 
       li.querySelector(".vocab-add-btn").addEventListener("click", () => {
@@ -450,7 +517,4 @@ document.addEventListener("DOMContentLoaded", () => {
       renderVocabCards();
     });
   }
-
-  // Pre-connect broker in background
-  connectBroker();
 });

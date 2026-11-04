@@ -1,6 +1,6 @@
 /**
- * Spomegel Personal Notes Module
- * Stores user vocabulary, phrases, and partner contacts persistently across matches
+ * Spomegel Notizen-Modul
+ * Speichert Notizen lokal im Browser (localStorage)
  */
 
 const NotesModule = {
@@ -15,21 +15,21 @@ const NotesModule = {
 
     if (!this.textarea) return;
 
-    // Load saved notes
+    // Gespeicherte Notizen laden
     const saved = localStorage.getItem(this.storageKey);
     if (saved) {
       this.textarea.value = saved;
     }
 
-    // Auto-save on input with debounce
+    // Automatisches Speichern beim Tippen
     let timeout = null;
     this.textarea.addEventListener("input", () => {
-      if (this.statusEl) this.statusEl.textContent = "Saving...";
+      if (this.statusEl) this.statusEl.textContent = "Speichern...";
       clearTimeout(timeout);
       timeout = setTimeout(() => {
         localStorage.setItem(this.storageKey, this.textarea.value);
         if (this.statusEl) {
-          this.statusEl.textContent = "Saved to browser";
+          this.statusEl.textContent = "Gespeichert";
           setTimeout(() => { if (this.statusEl) this.statusEl.textContent = ""; }, 2000);
         }
       }, 500);
@@ -39,7 +39,7 @@ const NotesModule = {
       this.copyBtn.addEventListener("click", () => {
         navigator.clipboard.writeText(this.textarea.value).then(() => {
           const original = this.copyBtn.textContent;
-          this.copyBtn.textContent = "Copied!";
+          this.copyBtn.textContent = "Kopiert!";
           setTimeout(() => { this.copyBtn.textContent = original; }, 2000);
         });
       });
@@ -52,7 +52,7 @@ const NotesModule = {
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `spomegel-notes-${new Date().toISOString().slice(0, 10)}.txt`;
+        a.download = `spomegel-notizen-${new Date().toISOString().slice(0, 10)}.txt`;
         a.click();
         URL.revokeObjectURL(url);
       });
@@ -60,7 +60,7 @@ const NotesModule = {
 
     if (this.clearBtn) {
       this.clearBtn.addEventListener("click", () => {
-        if (confirm("Clear your notes?")) {
+        if (confirm("Notizen wirklich löschen?")) {
           this.textarea.value = "";
           localStorage.removeItem(this.storageKey);
         }

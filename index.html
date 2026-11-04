@@ -1,119 +1,122 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="de">
 <head>
   <meta charset="UTF-8">
   <title>Spomegel</title>
   <link rel="stylesheet" href="css/style.css">
+  
+  <!-- PeerJS für Video- und Audio-Streaming -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <!-- MQTT für Matchmaking und Textnachrichten -->
   <script src="https://unpkg.com/mqtt@5.3.4/dist/mqtt.min.js"></script>
 </head>
 <body>
 
-  <p><strong>Timer:</strong> <span id="timerDisplay" class="timer">10:00</span></p>
+  <p><strong>Zeit:</strong> <span id="timerDisplay" class="timer">10:00</span></p>
   <hr>
 
-  <!-- SCREEN 1: Setup / Lobby -->
+  <!-- BILDSCHIRM 1: Lobby / Einstellungen -->
   <div id="lobbyScreen">
-    <h3>Start a Conversation</h3>
+    <h3>Gespräch starten</h3>
 
     <p>
-      <label for="nativeLang">I speak:</label><br>
+      <label for="nativeLang">Ich spreche:</label><br>
       <select id="nativeLang">
-        <option value="de" selected>German</option>
-        <option value="en">English</option>
-        <option value="fr">French</option>
-        <option value="es">Spanish</option>
-        <option value="it">Italian</option>
+        <option value="de" selected>Deutsch</option>
+        <option value="en">Englisch</option>
+        <option value="fr">Französisch</option>
+        <option value="es">Spanisch</option>
+        <option value="it">Italienisch</option>
       </select>
     </p>
 
     <p>
-      <label for="targetLang">I want to learn:</label><br>
+      <label for="targetLang">Ich möchte lernen:</label><br>
       <select id="targetLang">
-        <option value="fr" selected>French</option>
-        <option value="de">German</option>
-        <option value="en">English</option>
-        <option value="es">Spanish</option>
-        <option value="it">Italian</option>
+        <option value="fr" selected>Französisch</option>
+        <option value="de">Deutsch</option>
+        <option value="en">Englisch</option>
+        <option value="es">Spanisch</option>
+        <option value="it">Italienisch</option>
       </select>
     </p>
 
     <p>
-      <label for="levelSelect">My level:</label><br>
+      <label for="levelSelect">Mein Sprachniveau:</label><br>
       <select id="levelSelect">
-        <option value="A1">A1 (Beginner)</option>
-        <option value="A2">A2 (Elementary)</option>
-        <option value="B1" selected>B1 (Intermediate)</option>
-        <option value="B2">B2 (Upper-Intermediate)</option>
-        <option value="C1">C1 (Advanced)</option>
-        <option value="C2">C2 (Fluent)</option>
+        <option value="A1">A1 (Anfänger)</option>
+        <option value="A2">A2 (Grundlegend)</option>
+        <option value="B1" selected>B1 (Mittelstufe)</option>
+        <option value="B2">B2 (Gute Mittelstufe)</option>
+        <option value="C1">C1 (Fortgeschritten)</option>
+        <option value="C2">C2 (Fließend)</option>
       </select>
     </p>
 
     <p>
       <label for="motivationSelect">Motivation:</label><br>
       <select id="motivationSelect">
-        <option value="casual">Casual</option>
-        <option value="regular" selected>Regular</option>
-        <option value="intensive">Intensive</option>
+        <option value="casual">Locker (Zum Spaß)</option>
+        <option value="regular" selected>Regelmäßig (Schule / Reise)</option>
+        <option value="intensive">Intensiv (Fließend / Beruf)</option>
       </select>
     </p>
 
     <p>
-      <label for="topicSelect">Conversation topic:</label><br>
-      <select id="topicSelect">
-        <option value="travel" selected>Travel & Holidays</option>
-        <option value="daily">Daily Life & Habits</option>
-        <option value="food">Food & Cooking</option>
-        <option value="culture">Culture & Traditions</option>
-        <option value="deep">Deep Questions & Philosophy</option>
-      </select>
-    </p>
-
-    <p>
-      <button id="startBtn">Find Stranger</button>
+      <button id="startBtn">Partner suchen</button>
     </p>
   </div>
 
-  <!-- SCREEN 2: Waiting -->
+  <!-- BILDSCHIRM 2: Wartemodus -->
   <div id="searchOverlay" class="hidden">
-    <h3>Looking for a partner...</h3>
-    <p id="searchStatusText">Connecting...</p>
-    <p><em>(Tip: Open another browser tab with this page and click Find Stranger to test pairing)</em></p>
-    <button id="cancelSearchBtn">Cancel</button>
+    <h3>Suche nach einem Gesprächspartner...</h3>
+    <p id="searchStatusText">Kamera aktivieren und mit Netzwerk verbinden...</p>
+    <p><em>(Tipp: Öffne einen zweiten Tab mit dieser Seite und klicke auf Partner suchen, um die Verbindung direkt zu testen)</em></p>
+    <button id="cancelSearchBtn">Abbrechen</button>
   </div>
 
-  <!-- SCREEN 3: Chat Room -->
+  <!-- BILDSCHIRM 3: Video- und Chatraum -->
   <div id="callRoom" class="hidden">
-    <p id="practiceBanner"><strong>Connected</strong></p>
+    <p id="practiceBanner">Du übst: Französisch (B1)</p>
+
+    <p>
+      <strong>Fremder:</strong><br>
+      <video id="remoteVideo" autoplay playsinline></video>
+    </p>
+
+    <p>
+      <strong>Du:</strong><br>
+      <video id="localVideo" autoplay playsinline muted></video>
+    </p>
 
     <div id="chatMessages" class="chat-box"></div>
 
     <p>
-      <input type="text" id="chatInput" placeholder="Type message..." size="45">
-      <button id="chatSendBtn">Send</button>
+      <input type="text" id="chatInput" placeholder="Nachricht schreiben..." size="45">
+      <button id="chatSendBtn">Senden</button>
     </p>
 
     <p>
-      <button id="skipBtn">Next Stranger (Esc)</button>
-      <button id="leaveBtn">Disconnect</button>
+      <button id="skipBtn">Nächster Fremder (Esc)</button>
+      <button id="leaveBtn">Trennen</button>
     </p>
 
     <hr>
 
-    <h4>Topic: <span id="currentTopicTitle"></span></h4>
-    <p><strong>Prompt:</strong> <span id="currentQuestionText">Loading...</span></p>
-    <button id="nextQuestionBtn">Next Question</button>
+    <h4>Frage zum Reden</h4>
+    <p><strong>Frage:</strong> <span id="currentQuestionText">Lädt...</span></p>
+    <button id="nextQuestionBtn">Nächste Frage</button>
 
-    <h4 style="margin-top: 10px;">Vocabulary Helper</h4>
+    <h4 style="margin-top: 10px;">Wortschatz-Hilfe</h4>
     <ul id="vocabCardsContainer"></ul>
-    <button id="nextVocabBtn">More Words</button>
+    <button id="nextVocabBtn">Mehr Wörter</button>
 
-    <h4 style="margin-top: 10px;">Notes</h4>
-    <textarea id="notesTextarea" rows="5" cols="55" placeholder="Type personal notes here..."></textarea><br>
-    <span id="notesSaveStatus" style="font-size: 12px; color: gray;">Saved</span> | 
-    <button id="notesCopyBtn">Copy</button>
-    <button id="notesDownloadBtn">Export .txt</button>
-    <button id="notesClearBtn">Clear</button>
+    <h4 style="margin-top: 10px;">Notizen</h4>
+    <textarea id="notesTextarea" rows="5" cols="55" placeholder="Notizen hier eintragen..."></textarea><br>
+    <span id="notesSaveStatus" style="font-size: 12px; color: gray;">Gespeichert</span> | 
+    <button id="notesCopyBtn">Kopieren</button>
+    <button id="notesDownloadBtn">Als .txt speichern</button>
+    <button id="notesClearBtn">Löschen</button>
   </div>
 
   <script src="js/prompts.js"></script>
