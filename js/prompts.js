@@ -1,37 +1,160 @@
 /**
- * Spomegel Allgemeiner Wortschatz & Kennenlernfragen
+ * Spomegel – Vocabulary & Conversation Questions
+ * Questions are per target language. Vocab is per target language.
  */
 
 const GENERAL_DECK = {
   questions: {
-    intro: [
-      "Wie heißt du und woher kommst du?",
-      "Was machst du in deiner Freizeit am liebsten?",
-      "Warum lernst du diese Sprache und was gefällt dir daran?",
-      "Bist du eher ein Morgenmensch oder eine Nachteule?",
-      "Was ist deine Lieblingsstadt oder dein Lieblingsland?"
-    ],
-    A1_A2: [
-      "Welche Sprachen sprichst du bereits?",
-      "Was isst du am liebsten zum Frühstück?",
-      "Hast du Haustiere oder magst du Tiere?",
-      "Welche Musik hörst du gerne?",
-      "Wie sieht dein normaler Tag aus?"
-    ],
-    B1_B2: [
-      "Erzähle von einer lustigen oder interessanten Reise, die du gemacht hast.",
-      "Was fällt dir beim Sprachenlernen am schwersten und wie übst du?",
-      "Welchen Film oder welche Serie kannst du aktuell empfehlen?",
-      "Wenn du überall auf der Welt leben könntest, wo wäre das?",
-      "Was ist eine Gewohnheit, die du dieses Jahr verbessern möchtest?"
-    ],
-    C1_C2: [
-      "Inwiefern beeinflusst die Sprache die Art und Weise, wie wir denken?",
-      "Glaubst du, dass Künstliche Intelligenz menschliche Sprachlehrer ersetzen wird?",
-      "Was ist die wichtigste Lektion, die du im Leben bisher gelernt hast?",
-      "Wie hat sich das Leben junger Menschen im Vergleich zu früheren Generationen verändert?",
-      "Sollte jeder Mensch mindestens zwei Fremdsprachen fließend sprechen müssen?"
-    ]
+    de: {
+      intro: [
+        "Wie heißt du und woher kommst du?",
+        "Was machst du in deiner Freizeit am liebsten?",
+        "Warum lernst du diese Sprache und was gefällt dir daran?",
+        "Bist du eher ein Morgenmensch oder eine Nachteule?",
+        "Was ist deine Lieblingsstadt oder dein Lieblingsland?"
+      ],
+      A1_A2: [
+        "Welche Sprachen sprichst du bereits?",
+        "Was isst du am liebsten zum Frühstück?",
+        "Hast du Haustiere oder magst du Tiere?",
+        "Welche Musik hörst du gerne?",
+        "Wie sieht dein normaler Tag aus?"
+      ],
+      B1_B2: [
+        "Erzähle von einer lustigen oder interessanten Reise, die du gemacht hast.",
+        "Was fällt dir beim Sprachenlernen am schwersten und wie übst du?",
+        "Welchen Film oder welche Serie kannst du aktuell empfehlen?",
+        "Wenn du überall auf der Welt leben könntest, wo wäre das?",
+        "Was ist eine Gewohnheit, die du dieses Jahr verbessern möchtest?"
+      ],
+      C1_C2: [
+        "Inwiefern beeinflusst die Sprache die Art und Weise, wie wir denken?",
+        "Glaubst du, dass Künstliche Intelligenz menschliche Sprachlehrer ersetzen wird?",
+        "Was ist die wichtigste Lektion, die du im Leben bisher gelernt hast?",
+        "Wie hat sich das Leben junger Menschen im Vergleich zu früheren Generationen verändert?",
+        "Sollte jeder Mensch mindestens zwei Fremdsprachen fließend sprechen müssen?"
+      ]
+    },
+    en: {
+      intro: [
+        "What's your name and where are you from?",
+        "What do you like to do in your free time?",
+        "Why are you learning this language and what do you enjoy about it?",
+        "Are you more of a morning person or a night owl?",
+        "What's your favourite city or country?"
+      ],
+      A1_A2: [
+        "What languages do you already speak?",
+        "What do you like to eat for breakfast?",
+        "Do you have any pets or do you like animals?",
+        "What kind of music do you enjoy?",
+        "What does a typical day look like for you?"
+      ],
+      B1_B2: [
+        "Tell me about a funny or interesting trip you've taken.",
+        "What do you find hardest about learning languages and how do you practise?",
+        "What film or series would you recommend right now?",
+        "If you could live anywhere in the world, where would it be?",
+        "What's one habit you'd like to improve this year?"
+      ],
+      C1_C2: [
+        "In what ways does language influence the way we think?",
+        "Do you think artificial intelligence will replace human language teachers?",
+        "What is the most important lesson you've learned in life so far?",
+        "How has life changed for young people compared to previous generations?",
+        "Should everyone be required to speak at least two foreign languages fluently?"
+      ]
+    },
+    fr: {
+      intro: [
+        "Comment tu t'appelles et d'où viens-tu ?",
+        "Qu'est-ce que tu aimes faire pendant ton temps libre ?",
+        "Pourquoi apprends-tu cette langue et qu'est-ce qui te plaît ?",
+        "Tu es plutôt du matin ou du soir ?",
+        "Quelle est ta ville ou ton pays préféré ?"
+      ],
+      A1_A2: [
+        "Quelles langues parles-tu déjà ?",
+        "Qu'est-ce que tu aimes manger au petit-déjeuner ?",
+        "Tu as des animaux ou tu aimes les animaux ?",
+        "Quelle musique écoutes-tu ?",
+        "À quoi ressemble ta journée typique ?"
+      ],
+      B1_B2: [
+        "Raconte-moi un voyage amusant ou intéressant que tu as fait.",
+        "Qu'est-ce que tu trouves le plus difficile dans l'apprentissage des langues et comment tu t'entraînes ?",
+        "Quel film ou quelle série tu recommandes en ce moment ?",
+        "Si tu pouvais vivre n'importe où dans le monde, ce serait où ?",
+        "Quelle est une habitude que tu aimerais améliorer cette année ?"
+      ],
+      C1_C2: [
+        "Dans quelle mesure la langue influence-t-elle notre façon de penser ?",
+        "Penses-tu que l'intelligence artificielle remplacera les professeurs de langues ?",
+        "Quelle est la leçon la plus importante que tu aies apprise dans ta vie ?",
+        "Comment la vie a-t-elle changé pour les jeunes par rapport aux générations précédentes ?",
+        "Tout le monde devrait-il être obligé de parler couramment au moins deux langues étrangères ?"
+      ]
+    },
+    es: {
+      intro: [
+        "¿Cómo te llamas y de dónde eres?",
+        "¿Qué te gusta hacer en tu tiempo libre?",
+        "¿Por qué aprendes este idioma y qué te gusta de él?",
+        "¿Eres más de mañana o de noche?",
+        "¿Cuál es tu ciudad o país favorito?"
+      ],
+      A1_A2: [
+        "¿Qué idiomas hablas ya?",
+        "¿Qué te gusta comer para desayunar?",
+        "¿Tienes mascotas o te gustan los animales?",
+        "¿Qué tipo de música escuchas?",
+        "¿Cómo es un día normal para ti?"
+      ],
+      B1_B2: [
+        "Cuéntame un viaje divertido o interesante que hayas hecho.",
+        "¿Qué es lo más difícil de aprender idiomas y cómo practicas?",
+        "¿Qué película o serie recomendarías ahora mismo?",
+        "Si pudieras vivir en cualquier lugar del mundo, ¿dónde sería?",
+        "¿Qué hábito te gustaría mejorar este año?"
+      ],
+      C1_C2: [
+        "¿En qué medida influye el idioma en nuestra forma de pensar?",
+        "¿Crees que la inteligencia artificial reemplazará a los profesores de idiomas?",
+        "¿Cuál es la lección más importante que has aprendido en la vida?",
+        "¿Cómo ha cambiado la vida para los jóvenes en comparación con generaciones anteriores?",
+        "¿Debería todo el mundo estar obligado a hablar con fluidez al menos dos idiomas extranjeros?"
+      ]
+    },
+    it: {
+      intro: [
+        "Come ti chiami e da dove vieni?",
+        "Cosa ti piace fare nel tempo libero?",
+        "Perché stai imparando questa lingua e cosa ti piace di essa?",
+        "Sei più una persona mattiniera o nottambula?",
+        "Qual è la tua città o il tuo paese preferito?"
+      ],
+      A1_A2: [
+        "Quali lingue parli già?",
+        "Cosa ti piace mangiare a colazione?",
+        "Hai animali domestici o ti piacciono gli animali?",
+        "Che tipo di musica ascolti?",
+        "Com'è una tua giornata tipica?"
+      ],
+      B1_B2: [
+        "Raccontami un viaggio divertente o interessante che hai fatto.",
+        "Cosa trovi più difficile nell'apprendimento delle lingue e come ti eserciti?",
+        "Quale film o serie consiglieresti in questo momento?",
+        "Se potessi vivere ovunque nel mondo, dove sarebbe?",
+        "Qual è un'abitudine che vorresti migliorare quest'anno?"
+      ],
+      C1_C2: [
+        "In che modo il linguaggio influenza il nostro modo di pensare?",
+        "Pensi che l'intelligenza artificiale sostituirà gli insegnanti di lingue?",
+        "Qual è la lezione più importante che hai imparato nella vita finora?",
+        "Come è cambiata la vita dei giovani rispetto alle generazioni precedenti?",
+        "Tutti dovrebbero essere obbligati a parlare fluentemente almeno due lingue straniere?"
+      ]
+    }
   },
 
   vocab: {
@@ -102,11 +225,14 @@ function getPromptDeck(levelCode, targetLangCode) {
   if (levelCode.startsWith("B")) levelKey = "B1_B2";
   if (levelCode.startsWith("C")) levelKey = "C1_C2";
 
+  const langQuestions = GENERAL_DECK.questions[targetLangCode] || GENERAL_DECK.questions.en;
   const vocabList = GENERAL_DECK.vocab[targetLangCode] || GENERAL_DECK.vocab.en;
 
   return {
-    introQuestions: GENERAL_DECK.questions.intro,
-    levelQuestions: GENERAL_DECK.questions[levelKey] || GENERAL_DECK.questions.A1_A2,
+    questions: [
+      ...(langQuestions.intro || []),
+      ...(langQuestions[levelKey] || [])
+    ],
     vocabulary: vocabList
   };
 }

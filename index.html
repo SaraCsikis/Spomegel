@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <title>Spomegel</title>
   <link rel="stylesheet" href="css/style.css">
-  
+
   <!-- MQTT für Matchmaking, Textchat und WebRTC-Signaling -->
   <script src="https://unpkg.com/mqtt@5.3.4/dist/mqtt.min.js"></script>
 </head>
@@ -12,16 +12,16 @@
 
   <!-- BILDSCHIRM 1: Lobby / Einstellungen -->
   <div id="lobbyScreen">
-    <h3>Gespräch starten</h3>
+    <h3 id="ui-title">Gespräch starten</h3>
 
     <p>
-      <label>Modus:</label><br>
-      <label><input type="radio" name="mode" value="video" checked> Video</label> &nbsp;
-      <label><input type="radio" name="mode" value="text"> Nur Text</label>
+      <label id="ui-mode">Modus:</label><br>
+      <label><input type="radio" name="mode" value="video" checked> <span id="ui-video">Video</span></label> &nbsp;
+      <label><input type="radio" name="mode" value="text"> <span id="ui-text">Nur Text</span></label>
     </p>
 
     <p>
-      <label for="nativeLang">Ich spreche:</label><br>
+      <label id="ui-speaks" for="nativeLang">Ich spreche:</label><br>
       <select id="nativeLang">
         <option value="de" selected>Deutsch</option>
         <option value="en">Englisch</option>
@@ -32,7 +32,7 @@
     </p>
 
     <p>
-      <label for="targetLang">Ich möchte lernen:</label><br>
+      <label id="ui-learns" for="targetLang">Ich möchte lernen:</label><br>
       <select id="targetLang">
         <option value="fr" selected>Französisch</option>
         <option value="de">Deutsch</option>
@@ -43,23 +43,23 @@
     </p>
 
     <p>
-      <label for="levelSelect">Mein Sprachniveau:</label><br>
+      <label id="ui-level" for="levelSelect">Mein Sprachniveau:</label><br>
       <select id="levelSelect">
-        <option value="A1">A1 (Anfänger)</option>
-        <option value="A2">A2 (Grundlegend)</option>
-        <option value="B1" selected>B1 (Mittelstufe)</option>
-        <option value="B2">B2 (Gute Mittelstufe)</option>
-        <option value="C1">C1 (Fortgeschritten)</option>
-        <option value="C2">C2 (Fließend)</option>
+        <option value="A1">A1</option>
+        <option value="A2">A2</option>
+        <option value="B1" selected>B1</option>
+        <option value="B2">B2</option>
+        <option value="C1">C1</option>
+        <option value="C2">C2</option>
       </select>
     </p>
 
     <p>
-      <label for="motivationSelect">Motivation:</label><br>
+      <label id="ui-motivation" for="motivationSelect">Motivation:</label><br>
       <select id="motivationSelect">
-        <option value="casual">Locker (Zum Spaß)</option>
-        <option value="regular" selected>Regelmäßig (Schule / Reise)</option>
-        <option value="intensive">Intensiv (Fließend / Beruf)</option>
+        <option value="casual" id="ui-casual">Locker</option>
+        <option value="regular" id="ui-regular" selected>Regelmäßig</option>
+        <option value="intensive" id="ui-intensive">Intensiv</option>
       </select>
     </p>
 
@@ -70,8 +70,7 @@
 
   <!-- BILDSCHIRM 2: Wartemodus -->
   <div id="searchOverlay" class="hidden">
-    <h3>Suche nach einem Gesprächspartner...</h3>
-    <p id="searchStatusText">Warte auf passenden Partner im Netzwerk...</p>
+    <h3 id="ui-searching">Suche nach einem Gesprächspartner...</h3>
     <button id="cancelSearchBtn">Abbrechen</button>
   </div>
 
@@ -82,12 +81,12 @@
     <!-- Video-Bereich (wird im Nur-Text-Modus ausgeblendet) -->
     <div id="videoSection">
       <p>
-        <strong>Fremder:</strong><br>
+        <strong id="ui-stranger">Fremder:</strong><br>
         <video id="remoteVideo" autoplay playsinline></video>
       </p>
 
       <p>
-        <strong>Du:</strong><br>
+        <strong id="ui-you">Du:</strong><br>
         <video id="localVideo" autoplay playsinline muted></video>
       </p>
     </div>
@@ -105,14 +104,13 @@
 
     <hr>
 
-    <h4>Frage zum Reden</h4>
-    <p><strong>Frage:</strong> <span id="currentQuestionText">Lädt...</span></p>
-    <button id="nextQuestionBtn">Nächste Frage</button>
+    <h4 id="ui-questions-heading">Fragen zum Reden</h4>
+    <ul id="questionsList"></ul>
 
-    <h4 style="margin-top: 10px;">Wortschatz-Hilfe</h4>
+    <h4 style="margin-top: 10px;" id="ui-vocab-heading">Wortschatz-Hilfe</h4>
     <ul id="vocabCardsContainer"></ul>
 
-    <h4 style="margin-top: 10px;">Notizen</h4>
+    <h4 style="margin-top: 10px;" id="ui-notes-heading">Notizen</h4>
     <textarea id="notesTextarea" rows="5" cols="55" placeholder="Notizen hier eintragen..."></textarea><br>
     <span id="notesSaveStatus" style="font-size: 12px; color: gray;">Gespeichert</span>
   </div>
