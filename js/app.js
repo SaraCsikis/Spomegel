@@ -1,5 +1,6 @@
 /**
- * Spomegel Main Controller (Minimal & Simple)
+ * Spomegel - Ultra-Simple Text Chat & Matchmaking Engine
+ * Uses public MQTT over WebSockets for instant, zero-server stranger pairing
  */
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -18,15 +19,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const cancelSearchBtn = document.getElementById("cancelSearchBtn");
   const skipBtn = document.getElementById("skipBtn");
   const leaveBtn = document.getElementById("leaveBtn");
-  const micToggleBtn = document.getElementById("micToggleBtn");
-  const camToggleBtn = document.getElementById("camToggleBtn");
 
-  // Media
-  const localVideo = document.getElementById("localVideo");
-  const remoteVideo = document.getElementById("remoteVideo");
-  const videoPlaceholder = document.getElementById("videoPlaceholder");
-
-  // Chat
+  // Chat Elements
   const chatMessages = document.getElementById("chatMessages");
   const chatInput = document.getElementById("chatInput");
   const chatSendBtn = document.getElementById("chatSendBtn");
@@ -44,162 +38,288 @@ document.addEventListener("DOMContentLoaded", () => {
   const nextVocabBtn = document.getElementById("nextVocabBtn");
 
   // State
+  let mqttClient = null;
+  let myId = "user_" + Math.random().toString(36).substring(2, 8);
+  let currentRoomId = null;
+  let state = "idle"; // "idle" | "searching" | "matched"
+  let searchInterval = null;
+  let searchStartTime = 0;
+
+  let profile = {
+    nativeLang: "de",
+    targetLang: "fr",
+    level: "B1",
+    motivation: "regular",
+    topic: "travel"
+  };
+
   let currentDeck = null;
   let questionIndex = 0;
   let vocabOffset = 0;
-  let isMicMuted = false;
-  let isCamOff = false;
 
   // 10-Minute Timer (600s)
   const TOTAL_SECONDS = 600;
   let timerRemaining = TOTAL_SECONDS;
   let timerInterval = null;
 
-  // Initialize WebRTC & Matchmaking Engine
-  const engine = new SpomegelEngine({
-    onStateChange: (state, data) => {
-      if (state === "searching") {
-        searchOverlay.classList.remove("hidden");
-        lobbyScreen.classList.add("hidden");
-        callRoom.classList.add("hidden");
-      } else if (state === "matched") {
-        searchOverlay.classList.add("hidden");
-        lobbyScreen.classList.add("hidden");
-        callRoom.classList.remove("hidden");
-        startTimer();
-        setupPracticeDeck(data?.partnerProfile);
-      } else if (state === "idle") {
-        searchOverlay.classList.add("hidden");
-        callRoom.classList.add("hidden");
-        lobbyScreen.classList.remove("hidden");
-        resetTimer();
-        clearChat();
+  // Connect to public secure MQTT broker
+  function connectBroker() {
+    if (mqttClient && mqttClient.connected) return;
+
+    // Connect to EMQX public websocket broker
+    mqttClient = mqtt.connect("wss://broker.emqx.io:8084/mqtt", {
+      clientId: `spm_${myId}_${Math.random().toString(16).substring(2, 6)}`,
+      clean: true,
+      reconnectPeriod: 2500
+    });
+
+    mqttClient.on("connect", () => {
+      console.log("Connected to Spomegel network. My ID:", myId);
+      // Subscribe to private channel for match invitations
+      mqttClient.subscribe(`spomegel/user/${myId}`, { qos: 1 });
+    });
+
+    mqttClient.on("message", (topic, payload) => {
+      try {
+        const data = JSON.parse(payload.toString());
+        handleIncomingMessage(topic, data);
+      } catch (e) {
+        // Ignore unparseable
       }
-    },
+    });
 
-    onLocalStream: (stream) => {
-      if (localVideo) {
-        localVideo.srcObject = stream;
-        localVideo.play().catch(() => {});
+    mqttClient.on("error", (err) => {
+      console.warn("Network notice:", err.message);
+    });
+  }
+
+  // Handle incoming messages
+  function handleIncomingMessage(topic, data) {
+    // 1. Direct invitation received
+    if (topic === `spomegel/user/${myId}`) {
+      if (data.type === "INVITE" && state === "searching") {
+        console.log("Matched with partner via invite from:", data.from);
+        joinRoom(data.roomId, data.partnerProfile);
       }
-    },
-
-    onRemoteStream: (stream) => {
-      if (remoteVideo) {
-        if (stream) {
-          remoteVideo.srcObject = stream;
-          remoteVideo.play().catch(() => {});
-          if (videoPlaceholder) videoPlaceholder.classList.add("hidden");
-        } else {
-          remoteVideo.srcObject = null;
-          if (videoPlaceholder) videoPlaceholder.classList.remove("hidden");
-        }
-      }
-    },
-
-    onChatMessage: (msg) => {
-      appendChatMessage(msg.text, "partner");
-    },
-
-    onPartnerLeft: (isSkip) => {
-      appendSystemMessage(isSkip ? "Partner skipped to the next stranger." : "Partner disconnected.");
-      setTimeout(() => {
-        engine.skipPartner();
-      }, 1000);
-    },
-
-    onStatusUpdate: (text) => {
-      if (searchStatusText) searchStatusText.textContent = text;
     }
-  });
+    // 2. Queue broadcast
+    else if (topic === "spomegel/queue") {
+      if (state === "searching" && data.id && data.id !== myId) {
+        checkMatchCandidate(data);
+      }
+    }
+    // 3. In-Room Chat Message or Command
+    else if (topic === `spomegel/room/${currentRoomId}`) {
+      if (data.type === "CHAT") {
+        appendChatMessage(data.text, data.senderId === myId ? "me" : "partner");
+      } else if (data.type === "LEAVE") {
+        appendSystemMessage("Stranger has disconnected.");
+        setTimeout(() => {
+          if (state === "matched") startSearch();
+        }, 1200);
+      }
+    }
+  }
+
+  // Check if someone in the queue matches our criteria
+  function checkMatchCandidate(candidate) {
+    if (state !== "searching") return;
+
+    const waitSec = (Date.now() - searchStartTime) / 1000;
+
+    // Check language match
+    const isComplementary =
+      candidate.nativeLang === profile.targetLang &&
+      candidate.targetLang === profile.nativeLang;
+
+    const isSameTarget = candidate.targetLang === profile.targetLang;
+    const isRelaxedMatch = waitSec > 6; // Pair with anyone waiting if > 6s
+
+    if (isComplementary || isSameTarget || isRelaxedMatch) {
+      // Deterministic tie-breaker: user with higher ID creates room
+      if (myId > candidate.id) {
+        const roomId = "room_" + Math.random().toString(36).substring(2, 9);
+        console.log("Inviting candidate:", candidate.id, "to room:", roomId);
+
+        // Send direct invite
+        mqttClient.publish(
+          `spomegel/user/${candidate.id}`,
+          JSON.stringify({
+            type: "INVITE",
+            from: myId,
+            roomId: roomId,
+            partnerProfile: profile
+          })
+        );
+
+        // Join room ourselves
+        joinRoom(roomId, candidate);
+      }
+    }
+  }
+
+  // Join chat room
+  function joinRoom(roomId, partnerProfile) {
+    state = "matched";
+    currentRoomId = roomId;
+
+    clearInterval(searchInterval);
+    if (mqttClient) {
+      mqttClient.unsubscribe("spomegel/queue");
+      mqttClient.subscribe(`spomegel/room/${roomId}`, { qos: 1 });
+    }
+
+    // Switch UI
+    searchOverlay.classList.add("hidden");
+    lobbyScreen.classList.add("hidden");
+    callRoom.classList.remove("hidden");
+
+    // Setup chat & deck
+    clearChat();
+    appendSystemMessage("You are now connected with a stranger! Say hi!");
+    startTimer();
+    setupPracticeDeck(partnerProfile);
+  }
 
   // Start Searching
-  startBtn.addEventListener("click", () => {
-    const mode = document.querySelector('input[name="mode"]:checked')?.value || "video";
-    const nativeLang = document.getElementById("nativeLang").value;
-    const targetLang = document.getElementById("targetLang").value;
-    const level = document.getElementById("levelSelect").value;
-    const motivation = document.getElementById("motivationSelect").value;
-    const topic = document.getElementById("topicSelect").value;
+  function startSearch() {
+    state = "searching";
+    searchStartTime = Date.now();
+    currentRoomId = null;
 
-    if (nativeLang === targetLang) {
-      alert("Please select a target language different from your native language!");
+    searchOverlay.classList.remove("hidden");
+    lobbyScreen.classList.add("hidden");
+    callRoom.classList.add("hidden");
+
+    if (searchStatusText) {
+      searchStatusText.textContent = "Looking for someone to practice with...";
+    }
+
+    connectBroker();
+
+    // Subscribe to matchmaking queue
+    if (mqttClient && mqttClient.connected) {
+      mqttClient.subscribe("spomegel/queue", { qos: 0 });
+    }
+
+    // Broadcast presence every 2 seconds
+    broadcastQueuePresence();
+    clearInterval(searchInterval);
+    searchInterval = setInterval(() => {
+      if (state === "searching") {
+        broadcastQueuePresence();
+      } else {
+        clearInterval(searchInterval);
+      }
+    }, 2000);
+  }
+
+  function broadcastQueuePresence() {
+    if (!mqttClient || !mqttClient.connected || state !== "searching") return;
+
+    const payload = {
+      id: myId,
+      nativeLang: profile.nativeLang,
+      targetLang: profile.targetLang,
+      level: profile.level,
+      topic: profile.topic,
+      timestamp: Date.now()
+    };
+
+    mqttClient.publish("spomegel/queue", JSON.stringify(payload));
+  }
+
+  // Disconnect / Leave
+  function leave() {
+    if (currentRoomId && mqttClient) {
+      mqttClient.publish(
+        `spomegel/room/${currentRoomId}`,
+        JSON.stringify({ type: "LEAVE" })
+      );
+      mqttClient.unsubscribe(`spomegel/room/${currentRoomId}`);
+    }
+
+    state = "idle";
+    currentRoomId = null;
+    clearInterval(searchInterval);
+    resetTimer();
+
+    searchOverlay.classList.add("hidden");
+    callRoom.classList.add("hidden");
+    lobbyScreen.classList.remove("hidden");
+  }
+
+  // Skip / Next
+  function skip() {
+    if (currentRoomId && mqttClient) {
+      mqttClient.publish(
+        `spomegel/room/${currentRoomId}`,
+        JSON.stringify({ type: "LEAVE" })
+      );
+      mqttClient.unsubscribe(`spomegel/room/${currentRoomId}`);
+    }
+    resetTimer();
+    startSearch();
+  }
+
+  // UI Event Handlers
+  startBtn.addEventListener("click", () => {
+    profile.nativeLang = document.getElementById("nativeLang").value;
+    profile.targetLang = document.getElementById("targetLang").value;
+    profile.level = document.getElementById("levelSelect").value;
+    profile.motivation = document.getElementById("motivationSelect").value;
+    profile.topic = document.getElementById("topicSelect").value;
+
+    if (profile.nativeLang === profile.targetLang) {
+      alert("Please choose a target language different from your native language!");
       return;
     }
 
-    engine.startSearch({
-      mode,
-      nativeLang,
-      targetLang,
-      level,
-      motivation,
-      topic
-    });
+    startSearch();
   });
 
-  // Cancel Search
-  cancelSearchBtn.addEventListener("click", () => {
-    engine.leave();
-  });
-
-  // Skip / Next Partner
-  skipBtn.addEventListener("click", () => {
-    appendSystemMessage("Looking for next partner...");
-    resetTimer();
-    engine.skipPartner();
-  });
-
-  // Leave Call
+  cancelSearchBtn.addEventListener("click", leave);
   leaveBtn.addEventListener("click", () => {
-    if (confirm("Leave this conversation?")) {
-      engine.leave();
+    if (confirm("Disconnect and return to the start screen?")) {
+      leave();
     }
   });
 
-  // Media Toggles
-  micToggleBtn.addEventListener("click", () => {
-    isMicMuted = !isMicMuted;
-    engine.toggleAudio(!isMicMuted);
-    micToggleBtn.textContent = isMicMuted ? "Unmute Mic" : "Mute Mic";
-  });
+  skipBtn.addEventListener("click", skip);
 
-  camToggleBtn.addEventListener("click", () => {
-    isCamOff = !isCamOff;
-    engine.toggleVideo(!isCamOff);
-    camToggleBtn.textContent = isCamOff ? "Turn On Cam" : "Turn Off Cam";
-  });
-
-  // Chat
+  // Chat input
   function sendChat() {
     const text = chatInput.value.trim();
-    if (!text) return;
-    const sent = engine.sendChatMessage(text);
-    if (sent) {
-      appendChatMessage(text, "me");
-      chatInput.value = "";
-    } else {
-      appendSystemMessage("Chat not connected.");
-    }
+    if (!text || !currentRoomId || !mqttClient) return;
+
+    mqttClient.publish(
+      `spomegel/room/${currentRoomId}`,
+      JSON.stringify({
+        type: "CHAT",
+        senderId: myId,
+        text: text
+      })
+    );
+
+    chatInput.value = "";
   }
 
   chatSendBtn.addEventListener("click", sendChat);
   chatInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      sendChat();
-    }
+    if (e.key === "Enter") sendChat();
   });
 
   // Hotkey: Esc to skip
   window.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && engine.state === "matched") {
-      skipBtn.click();
+    if (e.key === "Escape" && state === "matched") {
+      skip();
     }
   });
 
   function appendChatMessage(text, sender) {
     const div = document.createElement("div");
     div.className = `chat-msg ${sender}`;
-    const label = sender === "me" ? "You: " : "Partner: ";
+    const label = sender === "me" ? "You: " : "Stranger: ";
     div.innerHTML = `<strong>${label}</strong><span class="msg-text"></span>`;
     div.querySelector(".msg-text").textContent = text;
     chatMessages.appendChild(div);
@@ -215,7 +335,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function clearChat() {
-    chatMessages.innerHTML = '<div class="chat-msg system">Chat started. Type a message below.</div>';
+    chatMessages.innerHTML = "";
   }
 
   // 10-Minute Timer
@@ -230,7 +350,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (timerRemaining <= 0) {
         clearInterval(timerInterval);
-        appendSystemMessage("⏰ 10 minutes reached! Great chat. Continue or click Next Partner.");
+        appendSystemMessage("⏰ 10 minutes reached! Great conversation. Continue or click Next Stranger.");
       }
     }, 1000);
   }
@@ -256,12 +376,11 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // Practice Deck & Vocab
+  // Setup Topic & Vocab Deck
   function setupPracticeDeck(partnerProfile) {
-    const myProfile = engine.profile;
-    const topicId = myProfile.topic || "travel";
-    const level = myProfile.level || "B1";
-    const targetLang = myProfile.targetLang || "fr";
+    const topicId = profile.topic || "travel";
+    const level = profile.level || "B1";
+    const targetLang = profile.targetLang || "fr";
 
     const langNames = {
       en: "English", de: "German", fr: "French", es: "Spanish", it: "Italian"
@@ -269,8 +388,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (practiceBanner) {
       practiceBanner.innerHTML = `
-        <strong>You are practicing:</strong> ${langNames[targetLang] || targetLang} (${level}) 
-        | <strong>Topic:</strong> ${topicId.toUpperCase()}
+        <span>🎯 <strong>You are practicing:</strong> ${langNames[targetLang] || targetLang} (${level})</span>
+        <span><strong>Topic:</strong> ${topicId.toUpperCase()}</span>
       `;
     }
 
@@ -331,4 +450,7 @@ document.addEventListener("DOMContentLoaded", () => {
       renderVocabCards();
     });
   }
+
+  // Pre-connect broker in background
+  connectBroker();
 });
